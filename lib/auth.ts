@@ -1,11 +1,9 @@
-// Server only. Better Auth on the app's Neon Postgres pool: email+password always, Google when its env vars are set.
+// Server only. Better Auth on the app's Neon Postgres pool: email+password only.
 // Tables user/session/account/verification: db/migrations/003-better-auth.sql. profiles row is made on user create.
 import 'server-only'
 import {betterAuth} from 'better-auth'
 import {headers} from 'next/headers'
 import {db} from '@/lib/db'
-
-export const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 
 /** "Jane.Doe+x@gmail.com" -> "jane_doe_x", padded/cut to fit profiles.handle ^[a-z0-9_]{3,30}$ */
 export function handleBase(email: string): string {
@@ -31,9 +29,6 @@ async function createProfile(user: {id: string; email: string; name: string}) {
 export const auth = betterAuth({
   database: db(),
   emailAndPassword: {enabled: true},
-  socialProviders: googleEnabled
-    ? {google: {clientId: process.env.GOOGLE_CLIENT_ID!, clientSecret: process.env.GOOGLE_CLIENT_SECRET!}}
-    : {},
   databaseHooks: {user: {create: {after: createProfile}}},
 })
 
@@ -45,7 +40,7 @@ export async function currentUser(): Promise<User | null> {
 }
 
 /** Admin = verified email listed in ROOMLATCH_ADMIN_EMAILS. Verified matters: anyone can sign up with any
- *  address via email+password (no verification mail), so only Google (or a manual SQL flip) proves ownership. */
+ *  address via email+password (no verification mail), so an admin's address is marked verified by hand (scripts/make-admin.mts). */
 export function isAdmin(user: User | null): boolean {
   if (!user?.emailVerified) return false
   const list = (process.env.ROOMLATCH_ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)

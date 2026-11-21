@@ -2,13 +2,12 @@
 import {useState} from 'react'
 import {useRouter} from 'next/navigation'
 import {Button} from '@/components/ui/button'
-import {GoogleButton} from '@/components/google-button'
 import {authClient} from '@/lib/auth-client'
 import {t} from '@/lib/copy'
 
 const field = 'min-h-12 w-full rounded-[18px] border border-zinc-200 bg-white px-4 text-sm outline-none focus:border-brand'
 
-export function LoginForm({googleEnabled}: {googleEnabled: boolean}) {
+export function LoginForm() {
   const router = useRouter()
   const [signUp, setSignUp] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -29,10 +28,6 @@ export function LoginForm({googleEnabled}: {googleEnabled: boolean}) {
 
   return (
     <div className="space-y-4">
-      <GoogleButton label={t.google} disabled={!googleEnabled || busy}
-        onClick={() => authClient.signIn.social({provider: 'google', callbackURL: '/profile'})} />
-      {!googleEnabled && <p className="text-center text-[11px] text-zinc-500">{t.googleOff}</p>}
-      <p className="text-center text-xs text-zinc-400">{t.or}</p>
       <form onSubmit={submit} className="space-y-3">
         {signUp && <input name="name" aria-label={t.displayName} placeholder={t.displayName} maxLength={60} autoComplete="name" className={field} />}
         <input name="email" type="email" required aria-label={t.email} placeholder={t.email} autoComplete="email" className={field} />

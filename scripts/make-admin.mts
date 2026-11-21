@@ -1,7 +1,7 @@
 // Mark an already signed-up user's email as verified so isAdmin() (lib/auth.ts) accepts it.
 //   node --env-file=.env.local scripts/make-admin.mts you@example.com
-// The email must also be listed in ROOMLATCH_ADMIN_EMAILS. Needed only for email+password accounts:
-// Google sign-ins are verified by Google already. Only run it for an address you know the person owns.
+// The email must also be listed in ROOMLATCH_ADMIN_EMAILS. Sign-up sends no verification mail, so only
+// run it for an address you know the person owns.
 import pg from 'pg'
 
 const email = process.argv[2]?.trim().toLowerCase()
