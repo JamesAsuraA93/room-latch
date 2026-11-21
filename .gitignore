@@ -20,3 +20,5 @@ public/listings/
 .env.production
 .vercel
 .env*
+
+.claude
