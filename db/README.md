@@ -14,6 +14,12 @@
 Prices are team ranges, not live Shopee prices. Listings store only what was seen (title, link,
 verification level, size as stated); there are no price, stock or image columns.
 
+`source = 'search'` rows come from `scripts/gather-shopee.mts` (Shopee public search + local Codex CLI
+deciding keep/category/styles). They add `image_url` (Shopee CDN link, checked to load, not copied),
+`price_thb` and `rating` as shown on the day (`checked_on`), and `shop_name`. Existing databases need
+`db/migrations/001-shopee-gathered.sql` first. Rerun:
+`node --env-file=.env.local scripts/gather-shopee.mts` (`--dry` = no writes, `--self-test` = offline checks).
+
 ## Users and Feed (empty until people sign up)
 
 | Table | What |

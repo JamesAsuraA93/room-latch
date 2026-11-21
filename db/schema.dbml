@@ -56,9 +56,13 @@ Table shopee_listings {
   evidence_status text [not null]
   dimensions_cm text [null, note: 'as stated; variant unconfirmed']
   notes text [not null, default: '']
-  source text [not null, note: 'snapshot | addition | exact_match']
+  source text [not null, note: 'snapshot | addition | exact_match | search']
   shown_in_rooms "text[]" [not null, default: '{}']
   checked_on date [not null]
+  image_url text [note: 'search rows: Shopee CDN link, not stored']
+  price_thb numeric(12,2)
+  shop_name text
+  rating real
   indexes {
     (shop_id, item_id) [unique]
     category
