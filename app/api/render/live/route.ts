@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   const gate = gateRequest(process.env, req.headers, 'POST')
   if (!gate.ok) return err(gate.status, gate.code)
   if (!/^multipart\/form-data;/i.test(req.headers.get('content-type') ?? '')) return err(415, 'unsupported_media_type')
-  if (Number(req.headers.get('content-length') ?? 0) > INPUT_MAX_BYTES + 64 * 1024) return err(413, 'body_too_large')
+  if (Number(req.headers.get('content-length') ?? 0) > 4 * INPUT_MAX_BYTES + 64 * 1024) return err(413, 'body_too_large')
   let form: FormData
   try { form = await req.formData() } catch { return err(400, 'bad_form') }
   if (form.get('consent') !== 'yes') return err(400, 'consent_required')
@@ -43,14 +43,18 @@ export async function POST(req: Request) {
   const style = styleEntry(v.input.styleId)
   if (!style) return err(400, 'unsupported_style')
 
-  const file = form.get('image')
-  if (!(file instanceof File)) return err(400, 'image_required')
-  if (file.size === 0 || file.size > INPUT_MAX_BYTES) return err(413, 'image_too_large')
-  const buf = Buffer.from(await file.arrayBuffer())
-  const kind = sniffImage(new Uint8Array(buf.subarray(0, 16)))
-  if (!kind) return err(415, 'image_not_jpeg_png_webp')
-
-  const started = await startJob(gate.provider, buf, kind, style, items)
+  const files = form.getAll('image')
+  if (files.length < 1 || files.length > 4) return err(400, 'image_count_1_to_4')
+  const images = []
+  for (const file of files) {
+    if (!(file instanceof File)) return err(400, 'image_required')
+    if (file.size === 0 || file.size > INPUT_MAX_BYTES) return err(413, 'image_too_large')
+    const buf = Buffer.from(await file.arrayBuffer())
+    const kind = sniffImage(new Uint8Array(buf.subarray(0, 16)))
+    if (!kind) return err(415, 'image_not_jpeg_png_webp')
+    images.push({image: buf, kind})
+  }
+  const started = await startJob(gate.provider, images[0].image, images[0].kind, style, items, images.slice(1))
   if (!started.ok) return err(started.status, started.code)
   return Response.json({job: started.job, live: true}, {status: 202, headers})
 }

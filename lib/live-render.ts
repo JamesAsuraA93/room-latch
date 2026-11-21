@@ -23,7 +23,7 @@ export type Job = {
   error?: string
   output?: {file: string; mime: string; width: number; height: number; bytes: number}
 }
-type Internal = Job & {dir: string; child?: ChildProcess; abort?: AbortController; timer?: NodeJS.Timeout}
+type Internal = Job & {dir: string; child?: ChildProcess; abort?: AbortController; timer?: NodeJS.Timeout; inputFiles?: string[]}
 
 // shortcut: in-memory job table for a single local Next process; jobs vanish on restart. Needs a real store before multi-instance use.
 const g = globalThis as unknown as {__rlJobs?: Map<string, Internal>}
@@ -61,7 +61,7 @@ async function verifyOutput(dir: string): Promise<Job['output'] | string> {
 
 async function finish(job: Internal, inputFile: string) {
   clearTimeout(job.timer)
-  await rm(inputFile, {force: true}) // the room photo never outlives the run
+  await Promise.all((job.inputFiles ?? [inputFile]).map(file => rm(file, {force: true}))) // the room photo never outlives the run
   if (job.status !== 'running') return
   const out = await verifyOutput(job.dir)
   if (typeof out === 'string') { job.status = 'failed'; job.error = out } else { job.status = 'succeeded'; job.output = out }
@@ -69,25 +69,25 @@ async function finish(job: Internal, inputFile: string) {
 }
 
 function runCodex(job: Internal, inputFile: string, prompt: string) {
-  if (!path.isAbsolute(CODEX_BIN) || !existsSync(CODEX_BIN)) { job.status = 'failed'; job.error = 'codex_not_installed'; job.finishedAt = Date.now(); return }
+  if (!path.isAbsolute(CODEX_BIN) || !existsSync(CODEX_BIN)) { job.status = 'failed'; job.error = 'codex_not_installed'; job.finishedAt = Date.now(); void finish(job, inputFile); return }
   const args = ['exec', '--skip-git-repo-check', '--ephemeral', '--color', 'never', '-s', 'workspace-write',
-    '-C', job.dir, '-o', path.join(job.dir, 'last-message.txt'), '-', '--image', inputFile]
+    '-C', job.dir, '-o', path.join(job.dir, 'last-message.txt'), '-', ...(job.inputFiles ?? [inputFile]).flatMap(file => ['--image', file])]
   // No shell; cwd = isolated job dir; sandbox lets the agent write only there; env has no API keys.
   const child = spawn(CODEX_BIN, args, {cwd: job.dir, env: childEnv(process.env, job.dir) as unknown as NodeJS.ProcessEnv, stdio: ['pipe', 'ignore', 'ignore']})
   job.child = child
   child.stdin.end(prompt)
-  child.on('error', () => { job.status = 'failed'; job.error = 'codex_spawn_failed'; job.finishedAt = Date.now() })
+  child.on('error', () => { job.status = 'failed'; job.error = 'codex_spawn_failed'; job.finishedAt = Date.now(); void finish(job, inputFile) })
   child.on('exit', code => {
     if (job.status === 'running' && code !== 0) { job.status = 'failed'; job.error = `codex_exit_${code}`; job.finishedAt = Date.now() }
     void finish(job, inputFile)
   })
 }
 
-async function runOpenai(job: Internal, input: Buffer, kind: ImageKind, prompt: string) {
+async function runOpenai(job: Internal, input: Buffer, kind: ImageKind, prompt: string, references: {image: Buffer; kind: ImageKind}[] = []) {
   const abort = new AbortController()
   job.abort = abort
   try {
-    const png = await openaiEdit({image: input, mime: kind.mime, prompt, signal: abort.signal})
+    const png = await openaiEdit({image: input, mime: kind.mime, prompt, references: references.map(r => ({image: r.image, mime: r.kind.mime})), signal: abort.signal})
     await writeFile(path.join(job.dir, OUTPUT_NAME), png, {mode: 0o600})
   } catch (e) {
     if (job.status === 'running') { job.status = 'failed'; job.error = (e as Error).name === 'AbortError' ? 'cancelled' : 'openai_failed' ; job.finishedAt = Date.now() }
@@ -97,19 +97,26 @@ async function runOpenai(job: Internal, input: Buffer, kind: ImageKind, prompt: 
 
 export type StartResult = {ok: true; job: Job} | {ok: false; status: number; code: string}
 
-export async function startJob(provider: Provider, image: Buffer, kind: ImageKind, style: StyleEntry, items: PromptItem[]): Promise<StartResult> {
+export async function startJob(provider: Provider, image: Buffer, kind: ImageKind, style: StyleEntry, items: PromptItem[], references: {image: Buffer; kind: ImageKind}[] = []): Promise<StartResult> {
+  if (references.length > 3) return {ok: false, status: 400, code: 'image_count_1_to_4'}
   if (running()) return {ok: false, status: 409, code: 'job_in_progress'}
   // keep only the newest finished job on disk
   for (const [id, j] of jobs) { await rm(j.dir, {recursive: true, force: true}); jobs.delete(id) }
   const dir = await mkdtemp(path.join(os.tmpdir(), 'roomlatch-render-'))
   const inputFile = path.join(dir, `input.${kind.ext}`)
   await writeFile(inputFile, image, {mode: 0o600})
-  const job: Internal = {id: randomUUID(), provider, status: 'running', startedAt: Date.now(), dir}
+  const inputFiles = [inputFile]
+  for (const [i, reference] of references.entries()) {
+    const file = path.join(dir, `reference-${i + 1}.${reference.kind.ext}`)
+    await writeFile(file, reference.image, {mode: 0o600})
+    inputFiles.push(file)
+  }
+  const job: Internal = {id: randomUUID(), provider, status: 'running', startedAt: Date.now(), dir, inputFiles}
   jobs.set(job.id, job)
   job.timer = setTimeout(() => cancelJob(job.id, 'timeout'), TIMEOUT_MS)
-  const prompt = buildPrompt(style, items, path.basename(inputFile))
+  const prompt = buildPrompt(style, items, path.basename(inputFile), inputFiles.slice(1).map(file => path.basename(file)))
   if (provider === 'codex') runCodex(job, inputFile, prompt)
-  else void runOpenai(job, image, kind, prompt)
+  else void runOpenai(job, image, kind, prompt, references)
   return {ok: true, job: publicJob(job)}
 }
 
