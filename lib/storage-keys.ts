@@ -9,6 +9,7 @@ export const STYLE_REFERENCE_KEY = 'room-ai-style-reference'
 export const PRODUCT_RENDER_KEY = 'room-ai-product-render' // product photos attached for the AI render
 export const PLACEMENT_KEY = 'room-ai-placement'
 export const RENDER_KEY = 'room-ai-render' // ผลจาก /api/render ล่าสุด (provider, jobId) ไม่มีรูป
+export const RECOMMEND_KEY = 'room-ai-recommend' // last AI product picks and the plan they were made for
 export const LAST_DESIGN_KEY = 'room-ai-last-design'
 
 // localStorage: stays on this device

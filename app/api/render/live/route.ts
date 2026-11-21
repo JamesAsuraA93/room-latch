@@ -7,7 +7,7 @@ import {MAX_ROOM_REFERENCES, startJob} from '@/lib/live-render'
 import {validateRenderInput} from '@/lib/render'
 import {loadCatalog, loadRealCatalog} from '@/lib/catalog'
 import {EXACT_LISTINGS} from '@/lib/listings'
-import {listingTitles} from '@/lib/db'
+import {listingAssets} from '@/lib/db'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -82,19 +82,26 @@ async function createJob(req: Request) {
   const {styleId, items: placed} = input.input
 
   // SKU ids must be known catalog/fixture/exact-listing ids; names come from our data, never from the client
+  // Neon listings picked on the Result page; DB down = only the CSV snapshot ids are allowed and listing photos are unavailable
+  const listings = new Map((await listingAssets(placed.map(i => i.id).filter(id => id.startsWith('shopee-'))).catch(() => [])).map(l => [l.id, l]))
   const names = new Map<string, string>([
     ...loadCatalog().map(p => [p.id, p.name] as const),
     ...EXACT_LISTINGS.map(l => [l.id, l.title] as const),
     ...loadRealCatalog().map(p => [p.id, p.title] as const),
-    // Neon listings picked on the Result page; DB down = only the CSV snapshot ids are allowed
-    ...await listingTitles(placed.map(i => i.id).filter(id => id.startsWith('shopee-'))).catch(() => []),
+    ...[...listings.values()].map(l => [l.id, l.title] as const),
   ])
   const productMeta = validateProductMeta(jsonField(form, 'productMeta', 'null', 'bad_product_meta'), placed.map(i => i.id), names)
     ?? refuse(400, 'invalid_product_references')
   const productUploads = form.getAll('productImage')
-  if (productUploads.length !== productMeta.length) refuse(400, 'product_image_count_mismatch')
+  if (productUploads.length !== productMeta.filter(m => m.source === 'upload').length) refuse(400, 'product_image_count_mismatch')
   const products = []
-  for (const [i, upload] of productUploads.entries()) products.push({...productMeta[i], ...await readImage(upload, PRODUCT_CODES)})
+  let nextUpload = 0
+  for (const {id, name, widthCm, source} of productMeta) {
+    if (source === 'upload') { products.push({id, name, widthCm, upload: await readImage(productUploads[nextUpload++], PRODUCT_CODES)}); continue }
+    const listing = listings.get(id)
+    if (!listing?.imagePath && !listing?.imageUrl) refuse(422, 'listing_photo_missing')
+    products.push({id, name, widthCm, listing: {imagePath: listing!.imagePath, imageUrl: listing!.imageUrl, dimensions: listing!.dimensions}})
+  }
 
   const style = styleEntry(styleId) ?? refuse(400, 'unsupported_style')
 
@@ -111,6 +118,7 @@ async function createJob(req: Request) {
     provider: gate.provider, clientKey: clientKey(req.headers), style, styleReference, products,
     room: rooms[0], roomReferences: rooms.slice(1),
     items: placed.map((item, i) => ({...item, name: productMeta[i].name})),
+    roomType: input.input.roomType, widthCm: input.input.width,
   })
   if (!started.ok) refuse(started.status, started.code)
   return Response.json({job: started.job, live: true}, {status: 202, headers})

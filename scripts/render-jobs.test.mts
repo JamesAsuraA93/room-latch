@@ -5,13 +5,14 @@ import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {readFileSync} from 'node:fs'
 import pg from 'pg'
-import {purgeExpiredJobs, readJob, renderPath, reserveJob, settleJob} from '../lib/render-jobs.ts'
+import {purgeExpiredJobs, readJob, recommendLimits, renderPath, reserveJob, reserveModelCall, settleJob} from '../lib/render-jobs.ts'
 
 const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL
 if (!url) { console.log('render-jobs skipped: DATABASE_URL_UNPOOLED or DATABASE_URL is not set'); process.exit(0) }
 
 // The migration carries its own begin/commit; they must not end our transaction.
-const migration = readFileSync(new URL('../db/migrations/002-render-jobs.sql', import.meta.url), 'utf8').replace(/^\s*(begin|commit)\s*;\s*$/gim, '')
+const migration = ['002-render-jobs.sql', '005-recommend-calls.sql']
+  .map(f => readFileSync(new URL(`../db/migrations/${f}`, import.meta.url), 'utf8').replace(/^\s*(begin|commit)\s*;\s*$/gim, '')).join('\n')
 assert.doesNotMatch(migration, /\b(commit|rollback|begin)\b/i)
 
 const sql = new pg.Client({connectionString: url})
@@ -19,7 +20,7 @@ await sql.connect()
 try {
   await sql.query('begin')
   await sql.query(migration)
-  await sql.query('delete from render_jobs') // clean slate for the counts below (rolled back)
+  await sql.query('delete from render_jobs; delete from recommend_calls') // clean slate for the counts below (rolled back)
 
   const limits = {perClient: 2, total: 3}
   const output = (id: string) => ({path: renderPath(id), width: 1536, height: 1024, bytes: 2_000_000})
@@ -63,6 +64,19 @@ try {
   assert.deepEqual(await purgeExpiredJobs(sql), [renderPath(a1)])
   assert.equal(await readJob(a1, sql), null)
   assert.equal((await readJob(a3, sql))?.status, 'cancelled')
+
+  // recommend model calls: per caller, then deployment-wide, and old calls stop counting
+  assert.deepEqual(recommendLimits({}), {perClient: 20, total: 500})
+  assert.deepEqual(recommendLimits({ROOMLATCH_RECOMMEND_DAILY_LIMIT: '0', ROOMLATCH_RECOMMEND_DAILY_CAP: 'x'}), {perClient: 0, total: 500})
+  const rl = {perClient: 2, total: 3}
+  assert.equal(await reserveModelCall('a', rl, sql), true)
+  assert.equal(await reserveModelCall('a', rl, sql), true)
+  assert.equal(await reserveModelCall('a', rl, sql), false)
+  assert.equal(await reserveModelCall('b', rl, sql), true)
+  assert.equal(await reserveModelCall('c', rl, sql), false)
+  await sql.query(`update recommend_calls set at = now() - interval '25 hours' where client_key = 'a'`)
+  assert.equal(await reserveModelCall('a', rl, sql), true)
+  assert.equal((await sql.query(`select count(*)::int as n from recommend_calls where at < now() - interval '24 hours'`)).rows[0].n, 0)
 
   // the schema refuses an image path that is not ours (kept last: it aborts the transaction)
   await assert.rejects(sql.query(`update render_jobs set output_path = 'designs/x.png' where id = $1`, [a3]), /render_jobs_output_path_check/)

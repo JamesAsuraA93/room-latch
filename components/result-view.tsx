@@ -4,6 +4,7 @@ import {readRoomImages} from '@/lib/room-images'
 import {ReferenceFeedback} from '@/components/reference-feedback'
 import {PageHeader} from '@/components/page-header'
 import {LiveRenderPanel} from '@/components/live-render-panel'
+import {AiPicks, type AiItem} from '@/components/ai-picks'
 import type {Provider} from '@/lib/live-render-core'
 import {RealProductsPicker} from '@/components/real-products-picker'
 import type {RealProduct} from '@/lib/real-catalog'
@@ -19,7 +20,7 @@ import {RoomCompare} from '@/components/room-compare'
 import {exactFor} from '@/lib/listings'
 import {baht, fill, t} from '@/lib/copy'
 import {BEFORE, BUDGET_PRESETS, DEFAULT_PLAN, EMPTY_PLACEMENT, WIDTH_PRESETS, readDrafts, readJson, readPlacement, readPlan, roomName, savePlan, shopeeSearchUrl, startDemoSession, styleName, writeDrafts, writePlacement, type Placement as PlacementState, type Plan} from '@/lib/demo'
-import {RENDER_KEY} from '@/lib/storage-keys'
+import {PRODUCT_RENDER_KEY, RENDER_KEY} from '@/lib/storage-keys'
 import {fits, minimalSwap, noFitHint, pickSet, type Change, type Product} from '@/lib/plan'
 import {Armchair, ArrowUpRight, Lamp, Ruler, Wallet, Package, SlidersHorizontal} from 'lucide-react'
 
@@ -30,8 +31,10 @@ const isLocked = (p: Product) => p.id.startsWith('custom-')
 export function ResultView({products, live = null, real = []}: {products: Product[]; live?: Provider | null; real?: RealProduct[]}) {
   // สินค้าจริงที่เลือก (แยกจากชุดที่คิดงบ) อยู่ในหน่วยความจำของหน้านี้เท่านั้น
   const [renderSession, setRenderSession] = useState(0)
+  const [aiItems, setAiItems] = useState<AiItem[]>([])
   const [realIds, setRealIds] = useState<string[]>([])
   const [plan, setPlan] = useState<Plan>(DEFAULT_PLAN)
+  const [planLoaded, setPlanLoaded] = useState(false) // AiPicks waits for it: DEFAULT_PLAN would cost a model call for the wrong room
   const [before, setBefore] = useState(BEFORE)
   const [roomImages, setRoomImages] = useState<string[]>([])
   const [sample, setSample] = useState(true)
@@ -47,7 +50,7 @@ export function ResultView({products, live = null, real = []}: {products: Produc
     const images = readRoomImages()
     setRoomImages(images)
     const p = readPlan()
-    setPlan(p); setBudget(String(p.budget)); setWidth(String(p.width))
+    setPlan(p); setPlanLoaded(true); setBudget(String(p.budget)); setWidth(String(p.width))
     setPlacement(readPlacement())
     setRender(readJson<{ok: boolean; provider?: string} | null>('session', RENDER_KEY, null))
     // รูปแรกคือภาพห้องหลัก ไม่มีรูป = ใช้ห้องตัวอย่าง
@@ -73,7 +76,8 @@ export function ResultView({products, live = null, real = []}: {products: Produc
   const photoOptions = Array.from(new Map([
     ...result.items.map(p => ({id: p.id, name: p.name, image: placement.photos[p.id], widthCm: p.widthCm ?? undefined})),
     ...exactItems,
-    ...real.filter(p => realIds.includes(p.id)).map(p => ({id: p.id, name: p.title})),
+    ...real.filter(p => realIds.includes(p.id)).map(p => ({id: p.id, name: p.title, listing: true})),
+    ...aiItems.map(p => ({id: p.id, name: p.title, listing: true})),
   ].map(p => [p.id, p])).values())
 
   function updatePlacement(next: PlacementState) {
@@ -149,6 +153,15 @@ export function ResultView({products, live = null, real = []}: {products: Produc
         ))}
       </div>
 
+      {planLoaded && <AiPicks plan={plan} onUse={items => {
+        // Hand the set to the render panel: it restores attached products from this key when it remounts.
+        setAiItems(items)
+        try { sessionStorage.setItem(PRODUCT_RENDER_KEY, JSON.stringify(items.map(p => ({id: p.id, name: p.title, listing: true})))) } catch {}
+        setRenderSession(n => n + 1)
+        document.getElementById('render-panel')?.scrollIntoView({behavior: 'smooth', block: 'start'})
+      }} />}
+
+      <div id="render-panel" className="scroll-mt-4" />
       <LiveRenderPanel key={renderSession} provider={live ?? 'openai'} ready={!!live} roomImage={before} roomImages={roomImages}
         products={photoOptions}
         meta={{styleId: plan.style, roomType: plan.roomType, budget: plan.budget, width: plan.width, items: result.items.map(p => ({id: p.id, ...(placement.pos[p.id] ?? {x: 0, y: 0, w: 0})}))}} />

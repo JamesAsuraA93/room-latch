@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node scripts/plan.test.mts && node scripts/render.test.mts && node scripts/live-render.test.mts && node scripts/real-catalog.test.mts && node scripts/room-images.test.mts",
+    "test": "node scripts/plan.test.mts && node scripts/render.test.mts && node scripts/live-render.test.mts && node scripts/real-catalog.test.mts && node scripts/room-images.test.mts && node scripts/render-pipeline.test.mts && node scripts/recommend.test.mts",
     "test:db": "node --env-file=.env.local scripts/render-jobs.test.mts",
     "db:seed": "node scripts/export-db-seed.mts > db/seed.sql"
   },
@@ -29,6 +29,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1",
+    "sharp": "^0.35.5",
     "tailwind-merge": "^3.0.0",
     "tailwindcss": "^4.0.0"
   },
