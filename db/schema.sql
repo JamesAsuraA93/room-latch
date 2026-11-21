@@ -89,8 +89,8 @@ create table designs (
   owner_id      text not null references profiles (user_id) on delete cascade,
   room_type     text not null references room_types (id),
   style_id      text not null references styles (id),
-  budget_thb    integer not null check (budget_thb > 0),
-  width_cm      integer not null check (width_cm > 0),
+  budget_thb    integer check (budget_thb > 0),   -- null = not set (e.g. team example rooms)
+  width_cm      integer check (width_cm > 0),
   total_max_thb integer check (total_max_thb >= 0),  -- sum of price_max at save time (estimate)
   title         text check (length(title) <= 80),
   remix_of      uuid references designs (id) on delete set null,

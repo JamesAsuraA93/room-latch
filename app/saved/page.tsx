@@ -6,13 +6,14 @@ import {useRouter} from 'next/navigation'
 import {Bookmark, Trash2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {baht, t} from '@/lib/copy'
-import {EMPTY_SOCIAL, FEED, PLACEMENT_KEY, readDrafts, readSocial, roomName, savePlan, styleName, writeDrafts, writeSocial, type Draft, type FeedPost, type Social} from '@/lib/demo'
+import {EMPTY_SOCIAL, PLACEMENT_KEY, readDrafts, readSocial, roomName, savePlan, styleName, writeDrafts, writeSocial, type Draft, type FeedPost, type Social} from '@/lib/demo'
+import {useFeedPosts} from '@/lib/use-feed'
 
 function Row({post, children}: {post: FeedPost; children?: React.ReactNode}) {
   return (
     <li className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-2">
       <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-zinc-100">
-        {post.after && <Image src={post.after} alt={post.roomLabel} fill sizes="64px" className="object-cover" />}
+        {post.after && <Image src={post.after} alt={post.roomLabel} fill sizes="64px" className="object-cover" unoptimized={post.after.startsWith('/api/')} />}
       </div>
       <div className="min-w-0 flex-1 leading-tight">
         <p className="truncate text-sm font-semibold text-zinc-900">{post.roomLabel}</p>
@@ -27,6 +28,7 @@ export default function Saved() {
   const router = useRouter()
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [social, setSocial] = useState<Social>(EMPTY_SOCIAL)
+  const feed = useFeedPosts()
   useEffect(() => { setDrafts(readDrafts()); setSocial(readSocial()) }, [])
 
   function open(d: Draft) {
@@ -44,7 +46,7 @@ export default function Saved() {
     setSocial(next); writeSocial(next)
   }
 
-  const savedRooms = [...social.posts, ...FEED].filter(p => social.saves.includes(p.id))
+  const savedRooms = [...social.posts, ...feed].filter(p => social.saves.includes(p.id))
 
   return (
     <div className="space-y-8">

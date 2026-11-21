@@ -39,7 +39,7 @@ export function FeedCard({post, liked, saved, onLike, onSave, onRemix, onRemove}
           {[{src: post.before, alt: t.before}, {src: post.after, alt: t.after}].map(img => (
             <div key={img.alt} className="relative h-80 w-full shrink-0 snap-center bg-zinc-100">
               {img.src
-                ? <Image src={img.src} alt={`${post.roomLabel} ${img.alt}`} fill sizes="(max-width: 480px) 100vw, 480px" className="object-cover" />
+                ? <Image src={img.src} alt={`${post.roomLabel} ${img.alt}`} fill sizes="(max-width: 480px) 100vw, 480px" className="object-cover" unoptimized={img.src.startsWith('/api/')} />
                 : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-8 text-center" data-missing-image={img.alt}>
                     <ImageOff className="size-6 text-zinc-400" aria-hidden="true" />
                     <p className="text-sm font-semibold text-zinc-600">{img.alt === t.before ? t.noVerifiedBefore : t.noAfterYet}</p>
