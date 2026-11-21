@@ -1,6 +1,7 @@
 // Server-only accurate render pipeline (production, OpenAI). Runs anywhere Node runs, Vercel included:
 // HTTP calls to OpenAI, Neon Object Storage through the S3 client, and sharp for pixels. No local tools.
 //
+//   0. clean    image model removes living beings from the room before placement
 //   1. photo    the listing's photo from our bucket (listings/<shop>-<item>/original.*), else Shopee's CDN; or the user's upload
 //   2. cutout   image model isolates the product on transparency           cached at listings/<shop>-<item>/cutout.png
 //   3. size     vision model reads the real size in cm                      cached at listings/<shop>-<item>/spec.json
@@ -12,7 +13,7 @@ import 'server-only'
 import sharp from 'sharp'
 import {sniffImage, type RenderImage, type StyleEntry} from '@/lib/live-render-core'
 import {openaiEdit, openaiJson} from '@/lib/openai-render'
-import {cutoutPrompt, fitCutout, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
+import {cutoutPrompt, fitCutout, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, roomCleanupPrompt, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
 import {storage} from '@/lib/storage'
 
 const PHOTO_MAX_BYTES = 8 * 1024 * 1024
@@ -112,20 +113,23 @@ async function productSize(p: PipelineProduct, photo: RenderImage, signal?: Abor
 
 /** Runs the whole pipeline and returns the final PNG. */
 export async function renderPlaced(input: PipelineInput, signal?: AbortSignal): Promise<Buffer> {
-  // Steps 1-3 per product, all products in parallel.
-  const prepared = await Promise.all(input.products.map(async p => {
-    const photo = await productPhoto(p, signal)
-    const [cutout, size] = await Promise.all([productCutout(p, photo, signal), productSize(p, photo, signal)])
-    return {...p, cutout, size}
-  }))
+  // Clean the room before placement; prepare product assets concurrently.
+  const [cleaned, prepared] = await Promise.all([
+    openaiEdit({image: input.room.image, mime: input.room.kind.mime, prompt: roomCleanupPrompt(), signal}),
+    Promise.all(input.products.map(async p => {
+      const photo = await productPhoto(p, signal)
+      const [cutout, size] = await Promise.all([productCutout(p, photo, signal), productSize(p, photo, signal)])
+      return {...p, cutout, size}
+    })),
+  ])
 
   // Step 4. One retry: the answer is validated strictly and a second sample is cheap next to a wrong-size render.
-  const {data: room, info: {width: roomW, height: roomH}} = await sharp(input.room.image).rotate().png().toBuffer({resolveWithObject: true})
+  const {data: room, info: {width: roomW, height: roomH}} = await sharp(cleaned).rotate().png().toBuffer({resolveWithObject: true})
   const prompt = placementPrompt({
     roomType: input.roomType, styleTh: input.style.th, widthCm: input.widthCm, extraViews: input.roomReferences.length, floorPlan: !!input.floorPlan, roomAreaM2: input.roomAreaM2,
     products: prepared.map(p => ({id: p.id, name: p.name, size: p.size, aspect: p.cutout.width / p.cutout.height, hint: p.hint})),
   })
-  const views = await Promise.all([input.room, ...input.roomReferences, ...(input.floorPlan ? [input.floorPlan] : [])].map(r => visionCopy(r.image)))
+  const views = await Promise.all([room, ...input.roomReferences.map(r => r.image), ...(input.floorPlan ? [input.floorPlan.image] : [])].map(visionCopy))
   let placements = null
   for (let attempt = 0; attempt < 2 && !placements; attempt++) placements = parsePlacements(await openaiJson({prompt, images: views, signal}), prepared.map(p => p.id))
   if (!placements) throw new PipelineError('placement_failed')

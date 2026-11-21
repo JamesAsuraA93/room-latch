@@ -28,9 +28,9 @@ export function FeedList({limit, tabs = false}: {limit?: number; tabs?: boolean}
   return (
     <div className="space-y-4">
       {tabs && (
-        <div role="tablist" className="flex gap-2">
+        <div role="group" aria-label="กรองโพสต์" className="flex gap-2">
           {[false, true].map(v => (
-            <button key={String(v)} role="tab" aria-selected={onlySaved === v} onClick={() => setOnlySaved(v)}
+            <button key={String(v)} aria-pressed={onlySaved === v} onClick={() => setOnlySaved(v)}
               className={`min-h-11 rounded-full border px-4 text-sm ${onlySaved === v ? (v ? 'border-sage bg-sage text-white' : 'border-brand-soft bg-brand-soft font-semibold text-brand') : 'border-zinc-200 bg-white text-ink'}`}>
               {v ? `${t.savedPosts} (${social.saves.length})` : t.allPosts}
             </button>
@@ -38,19 +38,20 @@ export function FeedList({limit, tabs = false}: {limit?: number; tabs?: boolean}
         </div>
       )}
       {status === 'error' && <p role="status" className="rounded-2xl bg-zinc-50 px-3 py-2 text-xs text-zinc-500">{t.feedFailed}</p>}
-      {status === 'loading' && !onlySaved && Array.from({length: Math.min(limit ?? 2, 2)}, (_, i) => (
-        <div key={i} aria-hidden="true" className="space-y-3 overflow-hidden rounded-3xl border border-zinc-200 bg-white p-3">
+      {posts.length === 0 && status !== 'loading' && <p className="py-10 text-center text-sm text-zinc-500">{t.noSaved}</p>}
+      <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      {status === 'loading' && !onlySaved && Array.from({length: Math.min(limit ?? 4, 4)}, (_, i) => (
+        <div key={i} aria-hidden="true" className="space-y-3 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-3">
           <div className="flex items-center gap-2.5">
             <Skeleton className="size-9 rounded-full" />
             <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-1/3" /><Skeleton className="h-3 w-1/2" /></div>
           </div>
-          <Skeleton className="-mx-3 h-80 rounded-none" />
+          <Skeleton className="-mx-3 aspect-[16/10] rounded-none" />
           <div className="grid grid-cols-2 gap-2"><Skeleton className="h-10 rounded-full" /><Skeleton className="h-10 rounded-full" /></div>
           <Skeleton className="h-12 w-full" />
         </div>
       ))}
-      {posts.length === 0 && status !== 'loading' && <p className="py-10 text-center text-sm text-zinc-500">{t.noSaved}</p>}
-      <div className="grid items-start gap-5 md:grid-cols-2">{posts.map(post => (
+      {posts.map(post => (
         <FeedCard key={post.id} post={post}
           liked={social.likes.includes(post.id)} saved={social.saves.includes(post.id)}
           onLike={() => update({...social, likes: toggle(social.likes, post.id)})}

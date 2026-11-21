@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import {buildPrompt, childEnv, clientKey, gateRequest, isLoopbackHost, liveProvider, pngSize, sniffImage} from '../lib/live-render-core.ts'
 import {renderLimits, renderPath} from '../lib/render-jobs.ts'
-import {MODEL_DEFAULTS, OPENAI_EDITS_URL, OpenaiRenderError, buildEditRequest, openaiEdit, openaiJson} from '../lib/openai-render.ts'
+import {MODEL_DEFAULTS, OPENAI_EDITS_URL, OpenaiRenderError, buildEditRequest, imageSettings, openaiEdit, openaiJson} from '../lib/openai-render.ts'
 import {codexFailureReason, elapsedLabel, isTerminalJob} from '../lib/render-outcome.ts'
 import {designError} from '../lib/design-errors.ts'
 
@@ -175,3 +175,8 @@ const productPrompt=buildPrompt({key:'minimal',th:'มินิมอล',prompt
 assert.match(productPrompt,/product-1.jpg/)
 assert.doesNotMatch(productPrompt,/\$imagegen/)
 console.log('product photo validation and OpenAI attachment contract ok')
+
+// Diagnostics and requests resolve exactly the same model; no credentials escape.
+assert.deepEqual(imageSettings({OPENAI_API_KEY: 'private'}), MODEL_DEFAULTS.render)
+assert.deepEqual(imageSettings({OPENAI_IMAGE_MODEL: 'configured-render', OPENAI_IMAGE_QUALITY: 'high'}), {model: 'configured-render', quality: 'high'})
+assert.deepEqual(imageSettings({OPENAI_CUTOUT_MODEL: 'configured-cutout'}, 'cutout'), {model: 'configured-cutout', quality: MODEL_DEFAULTS.cutout.quality})

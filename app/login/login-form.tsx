@@ -7,7 +7,7 @@ import {t} from '@/lib/copy'
 
 const field = 'min-h-12 w-full rounded-[18px] border border-zinc-200 bg-white px-4 text-sm outline-none focus:border-brand'
 
-export function LoginForm() {
+export function LoginForm({redirectTo = '/profile'}: {redirectTo?: string}) {
   const router = useRouter()
   const [signUp, setSignUp] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -23,7 +23,7 @@ export function LoginForm() {
       : await authClient.signIn.email({email, password})
     setBusy(false)
     if (error) return setError(`${t.authFailed}: ${error.message ?? error.statusText}`)
-    router.replace('/profile'); router.refresh()
+    router.replace(redirectTo); router.refresh()
   }
 
   return (

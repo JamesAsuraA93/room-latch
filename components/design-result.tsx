@@ -7,12 +7,14 @@ import {PageHeader} from '@/components/page-header'
 import {FurnitureImage, FurniturePrice} from '@/components/furniture-image'
 import {baht} from '@/lib/copy'
 import {readDrafts, readPlan, styleName, writeDrafts} from '@/lib/demo'
+import {ShareDesign} from '@/components/share-design'
 import {BudgetSummary} from '@/components/budget-summary'
 import {Dialog, DialogContent, DialogDescription, DialogTitle} from '@/components/ui/dialog'
 import {elapsedLabel, isTerminalJob} from '@/lib/render-outcome'
 import {readDesignSession, readSelection, saveDesignSession, type DesignSession} from '@/lib/design-session'
 import {readRoomImages} from '@/lib/room-images'
 import {designError} from '@/lib/design-errors'
+import {dismissOutcome, isOutcomeDismissed} from '@/lib/outcome-dismissal'
 import type {Job} from '@/lib/live-render-core'
 
 export function DesignResult({jobId}: {jobId?: string}) {
@@ -30,7 +32,7 @@ export function DesignResult({jobId}: {jobId?: string}) {
 
   useEffect(() => {
     const job = session?.job
-    if (!job || !isTerminalJob(job) || confirmedJob !== job.id || announced.current.has(job.id)) return
+    if (!job || !isTerminalJob(job) || confirmedJob !== job.id || announced.current.has(job.id) || isOutcomeDismissed(job.id)) return
     announced.current.add(job.id)
     setOutcomeOpen(true)
   }, [session?.job, confirmedJob])
@@ -44,7 +46,7 @@ export function DesignResult({jobId}: {jobId?: string}) {
   useEffect(() => {
     const previous = readDesignSession()
     const initial = jobId && previous?.job.id !== jobId ? {
-      job: {id: jobId, status: 'running', provider: 'codex', startedAt: Date.now()} as Job,
+      job: {id: jobId, status: 'running', provider: 'openai', startedAt: Date.now()} as Job,
       plan: readPlan(), items: readSelection()?.items || [], before: readRoomImages()[0] || '', photoCount: 0,
     } : previous
     setSession(initial); setLoaded(true)
@@ -116,7 +118,7 @@ export function DesignResult({jobId}: {jobId?: string}) {
       <PageHeader title={running ? 'กำลังออกแบบห้องของคุณ' : succeeded ? 'ห้องของคุณ พร้อมแล้ว' : 'ผลลัพธ์ห้องของคุณ'}>สไตล์{styleName(session.plan.style)} · {session.items.length} ชิ้น · งบ {baht(session.plan.budget)}</PageHeader>
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline"><Link href="/products"><RefreshCw className="size-4" />เปลี่ยนสินค้า</Link></Button>
-        {succeeded && <><Button variant="outline" onClick={save} disabled={saved}>{saved ? <Check className="size-4" /> : <Bookmark className="size-4" />}{saved ? 'บันทึกแล้ว' : 'บันทึกแบบ'}</Button><Button asChild><a href={output!} download="roomlatch-room.png"><ArrowDownToLine className="size-4" />ดาวน์โหลด</a></Button></>}
+        {succeeded && <><ShareDesign key={session.job.id} session={session} /><Button variant="outline" onClick={save} disabled={saved}>{saved ? <Check className="size-4" /> : <Bookmark className="size-4" />}{saved ? 'บันทึกแล้ว' : 'บันทึกแบบ'}</Button><Button asChild><a href={output!} download="roomlatch-room.png"><ArrowDownToLine className="size-4" />ดาวน์โหลด</a></Button></>}
       </div>
     </div>
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -142,13 +144,16 @@ export function DesignResult({jobId}: {jobId?: string}) {
         <div className="border-t border-zinc-200 pt-4"><BudgetSummary items={session.items} budget={session.plan.budget} /></div>
       </aside>
     </div>
-    <Dialog open={outcomeOpen} onOpenChange={setOutcomeOpen}>
+    <Dialog open={outcomeOpen} onOpenChange={open => {
+      if (!open) dismissOutcome(session.job.id)
+      setOutcomeOpen(open)
+    }}>
       <DialogContent closeLabel={succeeded ? 'ดูภาพห้อง' : 'ปิด'}>
         {succeeded ? <CheckCircle2 aria-hidden="true" className="mb-4 size-12 text-emerald-700" /> : <CircleAlert aria-hidden="true" className="mb-4 size-12 text-red-700" />}
         <DialogTitle className="text-2xl font-bold text-zinc-950">{succeeded ? 'สร้างภาพสำเร็จแล้ว' : session.job.status === 'cancelled' ? 'ยกเลิกการสร้างภาพแล้ว' : 'สร้างภาพไม่สำเร็จ'}</DialogTitle>
         <DialogDescription className="mt-3 text-base leading-7 text-zinc-800">{succeeded ? 'ภาพห้องพร้อมแล้ว คุณสามารถเทียบก่อน–หลัง บันทึก หรือดาวน์โหลดได้' : failureReason}</DialogDescription>
         <div className="mt-5 flex items-center gap-3 rounded-xl bg-stone-100 p-4 text-zinc-900"><Clock3 className="size-6 shrink-0" /><div><p className="text-sm font-medium">เวลาที่ใช้</p><p className="text-xl font-bold tabular-nums">{duration}</p></div></div>
-        {!succeeded && <><p className="mt-3 break-words text-sm text-zinc-700">รหัส: {session.job.error || session.job.status}</p><Button asChild className="mt-5 w-full"><Link href="/products">กลับไปเลือกสินค้าแล้วลองใหม่</Link></Button></>}
+        {!succeeded && <><p className="mt-3 break-words text-sm text-zinc-700">รหัส: {session.job.error || session.job.status}</p><Button asChild className="mt-5 w-full"><Link href="/products" onClick={() => dismissOutcome(session.job.id)}>กลับไปเลือกสินค้าแล้วลองใหม่</Link></Button></>}
       </DialogContent>
     </Dialog>
   </div>

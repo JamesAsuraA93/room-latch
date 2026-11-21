@@ -77,6 +77,7 @@ export type FeedPost = {
   after: string | null
   items: FeedItem[]
   local?: boolean // โพสต์ที่ผู้ใช้แชร์เอง เก็บใน localStorage เครื่องนี้เท่านั้น
+  aiRender?: boolean // ภาพผลลัพธ์ AI ที่แชร์จากเซิร์ฟเวอร์
   example?: boolean // โพสต์ตัวอย่างของทีม
 }
 

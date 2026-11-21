@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   try {
     const posts = (await publishedDesigns()).map(p => ({
-      ...p, budget: p.budget ?? undefined, width: p.width ?? undefined, example: true,
+      ...p, budget: p.budget ?? undefined, width: p.width ?? undefined, aiRender: true,
       before: `/api/designs/${p.id}/before`, after: `/api/designs/${p.id}/after`,
     }))
     return NextResponse.json({posts}, {headers: {'Cache-Control': 'no-store'}})

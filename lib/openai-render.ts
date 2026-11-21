@@ -23,6 +23,14 @@ export const MODEL_DEFAULTS = {
   decision: {model: 'gpt-6.1-terra'},
 } as const
 
+/** Public configuration only; never return the API key in diagnostics. */
+export function imageSettings(env: Record<string, string | undefined>, purpose: 'render' | 'cutout' = 'render') {
+  return {
+    model: (purpose === 'cutout' ? env.OPENAI_CUTOUT_MODEL : env.OPENAI_IMAGE_MODEL) || MODEL_DEFAULTS[purpose].model,
+    quality: (purpose === 'cutout' ? env.OPENAI_CUTOUT_QUALITY : env.OPENAI_IMAGE_QUALITY) || MODEL_DEFAULTS[purpose].quality,
+  }
+}
+
 type OpenaiEditArgs = {
   image: Buffer
   mime: string
@@ -46,7 +54,7 @@ export class OpenaiRenderError extends Error {
 /** Build the multipart request. Exported for contract tests. */
 export function buildEditRequest({image, mime, prompt, references = [], env = process.env, background, purpose = 'render'}: OpenaiEditArgs): {url: string; init: RequestInit} {
   const key = env.OPENAI_API_KEY
-  const model = (purpose === 'cutout' ? env.OPENAI_CUTOUT_MODEL : env.OPENAI_IMAGE_MODEL) || MODEL_DEFAULTS[purpose].model
+  const {model, quality} = imageSettings(env, purpose)
   if (!key) throw new OpenaiRenderError('missing_api_key')
   const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg'
   const form = new FormData()
@@ -55,7 +63,6 @@ export function buildEditRequest({image, mime, prompt, references = [], env = pr
   form.append('n', '1')
   form.append('size', 'auto')
   form.append('output_format', 'png')
-  const quality = (purpose === 'cutout' ? env.OPENAI_CUTOUT_QUALITY : env.OPENAI_IMAGE_QUALITY) || MODEL_DEFAULTS[purpose].quality
   if (!['low', 'medium', 'high', 'auto'].includes(quality)) throw new OpenaiRenderError('invalid_quality')
   form.append('quality', quality)
   if (background) form.append('background', background)

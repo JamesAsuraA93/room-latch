@@ -18,3 +18,4 @@ export const DESIGN_JOB_KEY = 'room-ai-design-job'
 // localStorage: stays on this device
 export const SOCIAL_KEY = 'room-ai-social'
 export const DRAFTS_KEY = 'room-ai-drafts'
+export const DISMISSED_OUTCOME_PREFIX = 'room-ai-dismissed-outcome:'
