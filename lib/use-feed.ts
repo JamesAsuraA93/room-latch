@@ -2,15 +2,17 @@
 import {useEffect, useState} from 'react'
 import {FEED, type FeedPost} from '@/lib/demo'
 
-// Team posts from /api/feed (Neon). Until it answers, or if it fails/returns none, use the labelled examples.
-export function useFeedPosts(): FeedPost[] {
-  const [posts, setPosts] = useState<FeedPost[]>(FEED)
+export type FeedStatus = 'loading' | 'ready' | 'error'
+
+// Team posts from /api/feed (Neon). While loading, callers show skeletons; if it fails/returns none, use the labelled examples.
+export function useFeedPosts(): {posts: FeedPost[]; status: FeedStatus} {
+  const [state, setState] = useState<{posts: FeedPost[]; status: FeedStatus}>({posts: [], status: 'loading'})
   useEffect(() => {
     let live = true
-    fetch('/api/feed').then(r => (r.ok ? r.json() : null)).then(d => {
-      if (live && d?.posts?.length) setPosts(d.posts as FeedPost[])
-    }).catch(() => {})
+    fetch('/api/feed').then(r => (r.ok ? r.json() : Promise.reject(r.status))).then(d => {
+      if (live) setState({posts: d?.posts?.length ? d.posts as FeedPost[] : FEED, status: 'ready'})
+    }).catch(() => { if (live) setState({posts: FEED, status: 'error'}) })
     return () => { live = false }
   }, [])
-  return posts
+  return state
 }

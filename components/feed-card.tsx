@@ -3,6 +3,7 @@ import {useRef, useState} from 'react'
 import Image from 'next/image'
 import {Bookmark, Heart, ImageOff, Shuffle, Trash2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
+import {Skeleton} from '@/components/ui/skeleton'
 import {SHOPEE_SEARCH, roomName, styleName, type FeedPost} from '@/lib/demo'
 import {baht, t} from '@/lib/copy'
 
@@ -39,7 +40,7 @@ export function FeedCard({post, liked, saved, onLike, onSave, onRemix, onRemove}
           {[{src: post.before, alt: t.before}, {src: post.after, alt: t.after}].map(img => (
             <div key={img.alt} className="relative h-80 w-full shrink-0 snap-center bg-zinc-100">
               {img.src
-                ? <Image src={img.src} alt={`${post.roomLabel} ${img.alt}`} fill sizes="(max-width: 480px) 100vw, 480px" className="object-cover" unoptimized={img.src.startsWith('/api/')} />
+                ? <FeedImage src={img.src} alt={`${post.roomLabel} ${img.alt}`} />
                 : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-8 text-center" data-missing-image={img.alt}>
                     <ImageOff className="size-6 text-zinc-400" aria-hidden="true" />
                     <p className="text-sm font-semibold text-zinc-600">{img.alt === t.before ? t.noVerifiedBefore : t.noAfterYet}</p>
@@ -101,5 +102,28 @@ export function FeedCard({post, liked, saved, onLike, onSave, onRemix, onRemove}
         <Button variant="outline" className="w-full border-sage/40 text-sage hover:bg-sage/5" onClick={onRemix}><Shuffle className="size-4" />{t.remix}</Button>
       </div>
     </article>
+  )
+}
+
+// skeleton until the image arrives; if it 404s/errors say so (with retry) instead of a blank box
+function FeedImage({src, alt}: {src: string; alt: string}) {
+  const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading')
+  const [attempt, setAttempt] = useState(0)
+  if (state === 'error') return (
+    <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-8 text-center" data-failed-image={alt}>
+      <ImageOff className="size-6 text-zinc-400" aria-hidden="true" />
+      <p className="text-sm font-semibold text-zinc-600">{t.imageFailed}</p>
+      <p className="text-[11px] text-zinc-500">{t.imageFailedHint}</p>
+      <button type="button" onClick={() => { setState('loading'); setAttempt(a => a + 1) }} className="mt-2 min-h-9 rounded-full border border-zinc-300 bg-white px-4 text-xs font-semibold text-ink">{t.retry}</button>
+    </div>
+  )
+  const url = attempt ? `${src}${src.includes('?') ? '&' : '?'}r=${attempt}` : src
+  return (
+    <>
+      {state === 'loading' && <Skeleton className="absolute inset-0 rounded-none" aria-hidden="true" />}
+      <Image key={url} src={url} alt={alt} fill sizes="(max-width: 480px) 100vw, 480px" unoptimized={src.startsWith('/api/')}
+        className={`object-cover transition-opacity ${state === 'ok' ? 'opacity-100' : 'opacity-0'}`}
+        onLoad={() => setState('ok')} onError={() => setState('error')} />
+    </>
   )
 }
