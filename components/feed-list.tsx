@@ -3,7 +3,8 @@ import {useEffect, useState} from 'react'
 import {useRouter} from 'next/navigation'
 import {FeedCard} from '@/components/feed-card'
 import {t} from '@/lib/copy'
-import {DEFAULT_PLAN, EMPTY_SOCIAL, FEED, readSocial, savePlan, writeSocial, type FeedPost, type Social} from '@/lib/demo'
+import {useFeedPosts} from '@/lib/use-feed'
+import {DEFAULT_PLAN, EMPTY_SOCIAL, readSocial, savePlan, writeSocial, type FeedPost, type Social} from '@/lib/demo'
 
 const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter(x => x !== id) : [...list, id])
 
@@ -12,6 +13,7 @@ export function FeedList({limit, tabs = false}: {limit?: number; tabs?: boolean}
   const router = useRouter()
   const [social, setSocial] = useState<Social>(EMPTY_SOCIAL)
   const [onlySaved, setOnlySaved] = useState(false)
+  const feed = useFeedPosts()
   useEffect(() => setSocial(readSocial()), [])
 
   function update(next: Social) { setSocial(next); writeSocial(next) }
@@ -20,7 +22,7 @@ export function FeedList({limit, tabs = false}: {limit?: number; tabs?: boolean}
     router.push('/upload')
   }
 
-  let posts = [...social.posts, ...FEED]
+  let posts = [...social.posts, ...feed]
   if (onlySaved) posts = posts.filter(p => social.saves.includes(p.id))
   if (limit) posts = posts.slice(0, limit)
 
