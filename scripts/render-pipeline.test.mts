@@ -1,6 +1,6 @@
 // node scripts/render-pipeline.test.mts — the pure parts of the accurate render pipeline. No network, no images.
 import assert from 'node:assert/strict'
-import {cutoutPrompt, fitCutout, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, sizePrompt, withUserWidth, type ProductSize} from '../lib/render-pipeline-core.ts'
+import {cutoutPrompt, fallbackSize, fitCutout, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, sizePrompt, withUserWidth, type ProductSize} from '../lib/render-pipeline-core.ts'
 
 // storage keys only for real listing ids: nothing from the request can reach another path
 assert.deepEqual(listingKeys('shopee-12-34'), {cutout: 'listings/12-34/cutout.png', spec: 'listings/12-34/spec.json'})
@@ -12,6 +12,15 @@ for (const bad of ['http://down-th.img.susercontent.com/file/abc', 'https://evil
 // sizes: plausible numbers only, unknown labels fall back to the cautious value
 assert.deepEqual(parseSize({width_cm: 150.04, depth_cm: 80, height_cm: 85, basis: 'title', confidence: 'high'}), {widthCm: 150, depthCm: 80, heightCm: 85, basis: 'title', confidence: 'high'})
 assert.deepEqual(parseSize({width_cm: 40, depth_cm: null, height_cm: 160, basis: 'guess', confidence: 'sure'}), {widthCm: 40, depthCm: null, heightCm: 160, basis: 'typical', confidence: 'low'})
+// a rug is a few millimetres thick: any size above 0 is real, and a tiny one never rounds down to 0
+assert.deepEqual(parseSize({width_cm: 120, depth_cm: 120, height_cm: 0.3, basis: 'typical', confidence: 'low'}), {widthCm: 120, depthCm: 120, heightCm: 0.3, basis: 'typical', confidence: 'low'})
+assert.equal(parseSize({width_cm: 50, height_cm: 0.02})?.heightCm, 0.02)
+for (const bad of [{width_cm: 50, height_cm: 0}, {width_cm: 50, height_cm: -1}, {width_cm: -5, height_cm: 50}]) assert.equal(parseSize(bad), null, JSON.stringify(bad))
+// no readable size: a low-confidence guess that keeps the cutout's proportions, never a crash
+assert.deepEqual(fallbackSize(2), {widthCm: 60, depthCm: null, heightCm: 30, basis: 'typical', confidence: 'low'})
+assert.equal(fallbackSize(1000).heightCm, 0.1)
+assert.equal(fallbackSize(0.01).heightCm, 400)
+assert.equal(fallbackSize(NaN).heightCm, 60)
 for (const bad of [null, 'x', {width_cm: 0, height_cm: 50}, {width_cm: 50, height_cm: 9000}, {width_cm: '50', height_cm: 50}, {width_cm: NaN, height_cm: 50}]) assert.equal(parseSize(bad), null, JSON.stringify(bad))
 
 // a typed width wins and the product keeps its proportions

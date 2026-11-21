@@ -55,7 +55,9 @@ export function sizePrompt(title: string, statedDimensions: string | null): stri
 
 const BASES: SizeBasis[] = ['catalog', 'title', 'photo_text', 'typical']
 const CONFIDENCE = ['low', 'medium', 'high'] as const
-const cm = (v: unknown, max: number) => typeof v === 'number' && Number.isFinite(v) && v >= 1 && v <= max ? Math.round(v * 10) / 10 : null
+// Any positive size is accepted: rugs, mats and wall art are only millimetres thick. Rounded to 0.1 cm, never to 0.
+const cm = (v: unknown, max: number) => typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= max ? (Math.round(v * 10) / 10 || v) : null
+const MIN_GUESS_CM = 0.1
 
 /** Model answer → size, or null when it is not a plausible furniture size. */
 export function parseSize(value: unknown): ProductSize | null {
@@ -67,6 +69,17 @@ export function parseSize(value: unknown): ProductSize | null {
   const basis = BASES.includes(v.basis as SizeBasis) ? v.basis as SizeBasis : 'typical'
   const confidence = CONFIDENCE.includes(v.confidence as never) ? v.confidence as ProductSize['confidence'] : 'low'
   return {widthCm, depthCm, heightCm, basis, confidence}
+}
+
+const FALLBACK_WIDTH_CM = 60
+/**
+ * Used when no plausible size could be read: a cautious guess from the cutout's proportions, so one product
+ * without a size does not fail the whole render. Marked low-confidence; never cached.
+ */
+export function fallbackSize(aspect: number): ProductSize {
+  const ratio = Number.isFinite(aspect) && aspect > 0 ? aspect : 1
+  const heightCm = Math.min(400, Math.max(MIN_GUESS_CM, Math.round(FALLBACK_WIDTH_CM / ratio * 10) / 10))
+  return {widthCm: FALLBACK_WIDTH_CM, depthCm: null, heightCm, basis: 'typical', confidence: 'low'}
 }
 
 /** A width the user typed is authoritative; height and depth scale with it so the proportions stay the product's. */

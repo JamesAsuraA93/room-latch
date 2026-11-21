@@ -11,8 +11,8 @@
 import 'server-only'
 import sharp from 'sharp'
 import {sniffImage, type RenderImage, type StyleEntry} from '@/lib/live-render-core'
-import {openaiEdit, openaiJson} from '@/lib/openai-render'
-import {cutoutPrompt, fitCutout, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
+import {OpenaiRenderError, openaiEdit, openaiJson} from '@/lib/openai-render'
+import {cutoutPrompt, fallbackSize, fitCutout, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
 import {storage} from '@/lib/storage'
 
 const PHOTO_MAX_BYTES = 8 * 1024 * 1024
@@ -98,16 +98,23 @@ async function productCutout(p: PipelineProduct, photo: RenderImage, signal?: Ab
 /** A smaller JPEG copy for vision calls: same content, fewer input tokens. */
 const visionCopy = async (image: Buffer) => ({image: await sharp(image).rotate().resize({width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true}).jpeg({quality: 85}).toBuffer(), mime: 'image/jpeg'})
 
-/** Step 3. Size read once per listing; a width the user typed always wins. */
-async function productSize(p: PipelineProduct, photo: RenderImage, signal?: AbortSignal): Promise<ProductSize> {
+/** Step 3. Size read once per listing. Null when the model gave no plausible size: the caller falls back. */
+async function productSize(p: PipelineProduct, photo: RenderImage, signal?: AbortSignal): Promise<ProductSize | null> {
   const key = p.listing ? listingKeys(p.id)?.spec : undefined
   let size = key && await storage().exists(key) ? parseSize(JSON.parse(await (await storage().download(key)).text())) : null
   if (!size) {
-    size = parseSize(await openaiJson({prompt: sizePrompt(p.name, p.listing?.dimensions ?? null), images: [await visionCopy(photo.image)], signal}))
-    if (!size) throw new PipelineError('size_failed')
+    let answer: unknown = null
+    try {
+      answer = await openaiJson({prompt: sizePrompt(p.name, p.listing?.dimensions ?? null), images: [await visionCopy(photo.image)], signal})
+    } catch (e) {
+      // an unreadable answer is bypassed below; auth, quota and cancel still end the job
+      if (!(e instanceof OpenaiRenderError && e.code === 'bad_response')) throw e
+    }
+    size = parseSize(answer)
+    if (!size) return null
     if (key) await storage().upload(key, JSON.stringify({width_cm: size.widthCm, depth_cm: size.depthCm, height_cm: size.heightCm, basis: size.basis, confidence: size.confidence}), {contentType: 'application/json'})
   }
-  return withUserWidth(size, p.widthCm)
+  return size
 }
 
 /** Runs the whole pipeline and returns the final PNG. */
@@ -115,7 +122,9 @@ export async function renderPlaced(input: PipelineInput, signal?: AbortSignal): 
   // Steps 1-3 per product, all products in parallel.
   const prepared = await Promise.all(input.products.map(async p => {
     const photo = await productPhoto(p, signal)
-    const [cutout, size] = await Promise.all([productCutout(p, photo, signal), productSize(p, photo, signal)])
+    const [cutout, read] = await Promise.all([productCutout(p, photo, signal), productSize(p, photo, signal)])
+    // a width the user typed always wins; no readable size → a cautious guess instead of failing the render
+    const size = withUserWidth(read ?? fallbackSize(cutout.width / cutout.height), p.widthCm)
     return {...p, cutout, size}
   }))
 
