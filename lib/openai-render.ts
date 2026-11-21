@@ -1,5 +1,5 @@
-// Server-only OpenAI Images edit provider (Phase 2). Off by default: used only when
-// ROOMLATCH_RENDER_PROVIDER=openai, ROOMLATCH_OPENAI_RENDER=1 and OPENAI_API_KEY are set on the server.
+// Server-only OpenAI Images edit provider: the production renderer. Off by default: used only when
+// ROOMLATCH_RENDER_PROVIDER=openai and OPENAI_API_KEY are set on the server (see liveProvider in lib/live-render-core.ts).
 // Reference: POST https://api.openai.com/v1/images/edits (multipart: model, image, prompt; response data[0].b64_json)
 // https://developers.openai.com/api/docs/guides/image-generation
 // The key is read from env per call and is never logged or returned. No fallback to Codex.
@@ -7,7 +7,7 @@
 export const OPENAI_EDITS_URL = 'https://api.openai.com/v1/images/edits'
 const MAX_B64 = 40 * 1024 * 1024
 
-export type OpenaiEditArgs = {
+type OpenaiEditArgs = {
   image: Buffer
   mime: string
   references?: {image: Buffer; mime: string; name?: string}[]
@@ -39,6 +39,7 @@ export function buildEditRequest({image, mime, prompt, references = [], env = pr
   const quality = env.OPENAI_IMAGE_QUALITY || 'medium'
   if (!['low', 'medium', 'high', 'auto'].includes(quality)) throw new OpenaiRenderError('invalid_quality')
   form.append('quality', quality)
+  // Only gpt-image-1.5 takes input_fidelity (the API says to omit it for newer models); that model shuts down 2026-12-01.
   if (model === 'gpt-image-1.5') form.append('input_fidelity', 'high')
   if (references.length > 15) throw new OpenaiRenderError('too_many_images')
   form.append(references.length ? 'image[]' : 'image', new Blob([new Uint8Array(image)], {type: mime}), `room.${ext}`)

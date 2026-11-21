@@ -1,0 +1,19 @@
+# CLI deploys upload the folder as-is; keep secrets and local-only files off Vercel.
+.env*
+!.env.example
+.vercel
+.neon
+node_modules
+.next
+out
+*.tsbuildinfo
+**/settings.local.json
+generated_images
+.gather-decisions.json
+# local-only demo: owner's real room markers, /real-demo, Shopee seller photos (no rights)
+local-demo.json
+LOCAL_ONLY.md
+app/real-demo
+components/real-demo.tsx
+lib/real-demo-listings.ts
+public/listings

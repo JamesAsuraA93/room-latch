@@ -4,10 +4,10 @@ import {readFileSync} from 'node:fs'
 import {parseCsv, toProducts} from '../lib/plan.ts'
 import {FIXTURES} from '../lib/fixtures.ts'
 import {EXACT_LISTINGS} from '../lib/listings.ts'
-import {APP_STYLES, mergeReal, toRealProducts} from '../lib/real-catalog.ts'
+import {mergeReal, toRealProducts} from '../lib/real-catalog.ts'
+import {ROOM_TYPE_IDS, STYLE_IDS, isStyleId} from '../lib/styles.ts'
 import {t} from '../lib/copy.ts'
 
-const ROOM_TYPES = ['condo', 'bedroom', 'living', 'empty', 'cluttered']
 const CHECKED_ON = '2026-11-21'
 const csv = (f: string) => parseCsv(readFileSync(new URL(`../catalog/${f}`, import.meta.url), 'utf8'))
 
@@ -53,11 +53,11 @@ const out = [
   `-- Source: catalog/*.csv, lib/fixtures.ts, lib/listings.ts. No live price/stock data.`,
   `set client_encoding = 'UTF8';`,
   'begin;',
-  rows('styles', ['id', 'name_th', 'sort_order'], APP_STYLES.map((s, i) => [s, label[s] ?? s, i + 1])),
-  rows('room_types', ['id', 'name_th', 'sort_order'], ROOM_TYPES.map((r, i) => [r, label[r] ?? r, i + 1])),
+  rows('styles', ['id', 'name_th', 'sort_order'], STYLE_IDS.map((s, i) => [s, label[s] ?? s, i + 1])),
+  rows('room_types', ['id', 'name_th', 'sort_order'], ROOM_TYPE_IDS.map((r, i) => [r, label[r] ?? r, i + 1])),
   rows('catalog_items', ['id', 'room_type', 'slot', 'name', 'keyword', 'price_min_thb', 'price_max_thb', 'priority', 'listing_url', 'width_cm', 'uses_floor', 'is_fixture'],
     items.map(p => [p.id, p.roomType, p.slot, p.name, p.keyword, p.priceMin, p.priceMax, p.priority, p.deeplink || null, p.widthCm, p.floor, p.id.startsWith('fixture-')])),
-  rows('catalog_item_styles', ['item_id', 'style_id'], items.flatMap(p => p.styles.filter(s => APP_STYLES.includes(s)).map(s => [p.id, s]))),
+  rows('catalog_item_styles', ['item_id', 'style_id'], items.flatMap(p => p.styles.filter(isStyleId).map(s => [p.id, s]))),
   rows('shopee_listings', ['id', 'shop_id', 'item_id', 'title', 'category', 'verification', 'evidence_status', 'dimensions_cm', 'notes', 'source', 'shown_in_rooms', 'checked_on'], [
     ...real.map(p => { const [shop, item] = shopItem(p.url); return [p.id, shop, item, p.title, p.category, p.verification, evidence.get(p.id), p.dimensions, p.notes, sourceOf.get(p.id), exactRooms.get(p.id) ?? [], CHECKED_ON] }),
     ...exactRows,

@@ -13,7 +13,7 @@ function GoogleMark() {
   )
 }
 
-// ปุ่มล็อกอินตัวเดียวทั้งแอป เปลี่ยนที่นี่ที่เดียวตอนต่อ Supabase Auth จริง
+// ปุ่มล็อกอินตัวเดียวทั้งแอป การเรียก Better Auth อยู่ใน app/login/login-form.tsx
 export function GoogleButton({className, label, ...props}: React.ComponentProps<'button'> & {label: string}) {
   return (
     <Button variant="outline" className={cn('w-full border-zinc-300 bg-white font-semibold text-zinc-900 shadow-sm', className)} {...props}>

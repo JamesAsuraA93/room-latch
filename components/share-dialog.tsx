@@ -4,7 +4,7 @@ import Link from 'next/link'
 import {Button} from '@/components/ui/button'
 import {Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger} from '@/components/ui/dialog'
 import {BRAND, baht, fill, t} from '@/lib/copy'
-import {BEFORE, SHOPEE_SEARCH, readSocial, roomName, styleImage, styleName, writeSocial, type FeedPost, type Plan} from '@/lib/demo'
+import {BEFORE, readSocial, roomName, shopeeSearchUrl, styleImage, styleName, writeSocial, type FeedPost, type Plan} from '@/lib/demo'
 import {isFixture} from '@/lib/fixtures'
 import type {ExactListing} from '@/lib/listings'
 import type {Product} from '@/lib/plan'
@@ -12,10 +12,10 @@ import type {Product} from '@/lib/plan'
 const priceLabel = (p: Product) => isFixture(p) ? `${t.shareFixture} ${baht(p.priceMax)}` : `${t.shareRange} ${baht(p.priceMin)}–${baht(p.priceMax)}`
 
 /** ข้อความสรุปที่แชร์ได้: ไม่มีรูป ติดป้ายราคาตัวอย่าง/ช่วงประมาณ ลิงก์ค้นหาไม่ใช่ประกาศ ยกเว้นประกาศจริงที่ยืนยันแล้ว */
-export function shareSummary(plan: Plan, items: Product[], exacts: ExactListing[], total: number) {
+function shareSummary(plan: Plan, items: Product[], exacts: ExactListing[], total: number) {
   return [
     fill(t.shareSummaryHead, {app: BRAND.name, room: roomName(plan.roomType), style: styleName(plan.style), budget: baht(plan.budget), width: plan.width, total: baht(total)}),
-    ...items.map(p => `- ${p.name} · ${priceLabel(p)} · ${p.deeplink ? p.deeplink : `${t.shareSearch}: ${SHOPEE_SEARCH}${encodeURIComponent(p.keyword)}`}`),
+    ...items.map(p => `- ${p.name} · ${priceLabel(p)} · ${p.deeplink ? p.deeplink : `${t.shareSearch}: ${shopeeSearchUrl(p.keyword)}`}`),
     ...exacts.map(l => `- ${l.title} · ${t.shareExact} · ${l.url}`),
     t.shareFoot,
   ].join('\n')

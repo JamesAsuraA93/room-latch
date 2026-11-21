@@ -1,6 +1,8 @@
 // Static, vetted snapshot of real Shopee listings (catalog/shopee-real-snapshot.csv, 2026-11-21).
 // Not a live API: no price, stock or rights claims, no image fetching. Kept separate from the
 // budget/width engine (lib/plan.ts), which still uses catalog ranges + labelled fixtures.
+import {isStyleId} from './styles.ts'
+
 export const REAL_CATEGORIES = ['seating', 'table', 'light', 'textile', 'accent'] as const
 export type RealCategory = typeof REAL_CATEGORIES[number]
 
@@ -36,10 +38,9 @@ export const STYLE_ALIAS: Record<string, string[]> = {
   'mid-century': [],
 }
 
-// The app's own 8 style ids. Files written with these tags are read with mode 'direct' (no aliasing),
+// Files tagged with the app's own style ids (lib/styles.ts) are read with mode 'direct' (no aliasing),
 // so 'minimal' there means only minimal, while the original snapshot keeps its aliases ('minimal' → minimal + muji).
-export const APP_STYLES = ['minimal', 'muji', 'japandi', 'scandi', 'loft', 'luxe', 'boho', 'nordic']
-export type TagMode = 'alias' | 'direct'
+type TagMode = 'alias' | 'direct'
 
 const PHOTO = new Set(['Shopee exact listing to CDN', 'Shopee index + exact CDN + manufacturer model page', 'listing_and_gallery_opened'])
 
@@ -61,7 +62,7 @@ export function toRealProducts(rows: Record<string, string>[], mode: TagMode = '
     const category = r.category?.trim() as RealCategory
     if (!REAL_CATEGORIES.includes(category)) continue
     const tags = r.style_ids.split('|').map(s => s.trim())
-    const styles = [...new Set(mode === 'direct' ? tags.filter(s => APP_STYLES.includes(s)) : tags.flatMap(s => STYLE_ALIAS[s] ?? []))]
+    const styles = [...new Set(mode === 'direct' ? tags.filter(isStyleId) : tags.flatMap(s => STYLE_ALIAS[s] ?? []))]
     out.push({
       id: `shopee-${shop}-${item}`,
       title: r.title.trim(),

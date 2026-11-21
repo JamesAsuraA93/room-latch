@@ -6,7 +6,7 @@ import {Button} from '@/components/ui/button'
 import {NumberField} from '@/components/number-field'
 import {RemixBanner} from '@/components/remix-banner'
 import {t} from '@/lib/copy'
-import {DEFAULT_PLAN, ROOM_TYPES, readPlacement, readPlan, roomName, savePlan, writePlacement} from '@/lib/demo'
+import {BUDGET_PRESETS, DEFAULT_PLAN, ROOM_TYPES, WIDTH_PRESETS, readPlacement, readPlan, roomName, savePlan, writePlacement} from '@/lib/demo'
 
 export default function Setup() {
   const router = useRouter()
@@ -33,8 +33,14 @@ export default function Setup() {
           ))}
         </div>
       </fieldset>
-      <div className="grid gap-5 md:grid-cols-2"><div className="rounded-[26px] bg-white p-6"><NumberField label={t.budget} value={budget} onChange={setBudget} presets={[3500, 5000, 10000]} /></div><div className="rounded-[26px] bg-white p-6">
-      <NumberField label={t.width} hint={t.widthHint} value={width} onChange={setWidth} presets={[60, 80, 120]} /></div></div>
+      <div className="grid gap-5 md:grid-cols-2">
+        <div className="rounded-[26px] bg-white p-6">
+          <NumberField label={t.budget} value={budget} onChange={setBudget} presets={BUDGET_PRESETS} />
+        </div>
+        <div className="rounded-[26px] bg-white p-6">
+          <NumberField label={t.width} hint={t.widthHint} value={width} onChange={setWidth} presets={WIDTH_PRESETS} />
+        </div>
+      </div>
       {!valid && <p role="alert" className="text-sm text-red-700">{t.invalidNumber}</p>}
       <ActionBar>
         <Button disabled={!valid} className="w-full" onClick={() => { savePlan({roomType, budget: Number(budget), width: Number(width)}); writePlacement({...readPlacement(), set: undefined}); router.push('/loading') }}>{t.seeSet}</Button>

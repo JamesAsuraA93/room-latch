@@ -144,11 +144,30 @@ create table design_saves (
   primary key (design_id, user_id)
 );
 
+-- AI render jobs run by the OpenAI provider (lib/render-jobs.ts). Status lives here so any server instance
+-- can answer a poll; the output image lives in Object storage. Rows also back the daily limits.
+-- Rows and their images are purged 24 hours after they start.
+create table render_jobs (
+  id           uuid primary key,
+  client_key   text not null,               -- hash of the caller's IP: the rate-limit bucket, never the raw address
+  status       text not null default 'running' check (status in ('running', 'succeeded', 'failed', 'cancelled')),
+  error        text check (length(error) <= 80),
+  output_path  text check (output_path ~ '^renders/[0-9a-f-]{36}\.png$'),
+  image_w      integer check (image_w > 0),
+  image_h      integer check (image_h > 0),
+  bytes        integer check (bytes > 0),
+  started_at   timestamptz not null default now(),
+  finished_at  timestamptz,
+  check (status <> 'succeeded' or (output_path is not null and image_w is not null and image_h is not null and bytes is not null)),
+  check ((status = 'running') = (finished_at is null))
+);
+
 create index designs_feed_idx on designs (published_at desc) where published_at is not null;
 create index designs_owner_idx on designs (owner_id, updated_at desc);
 create index designs_remix_idx on designs (remix_of) where remix_of is not null;
 create index design_likes_user_idx on design_likes (user_id);
 create index design_saves_user_idx on design_saves (user_id, created_at desc);
+create index render_jobs_started_idx on render_jobs (started_at);
 create index design_items_listing_idx on design_items (listing_id) where listing_id is not null;
 
 create index catalog_items_room_slot_idx on catalog_items (room_type, slot);

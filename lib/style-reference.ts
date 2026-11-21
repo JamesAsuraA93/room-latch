@@ -1,4 +1,6 @@
-export const STYLE_REFERENCE_KEY = 'room-ai-style-reference'
+import {STYLE_REFERENCE_KEY} from './storage-keys.ts'
+
+export {STYLE_REFERENCE_KEY}
 export function readStyleReference(): string {
   try { return sessionStorage.getItem(STYLE_REFERENCE_KEY) || '' } catch { return '' }
 }

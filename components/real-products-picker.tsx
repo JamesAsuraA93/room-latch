@@ -9,7 +9,7 @@ const BADGE: Record<Verification, {label: string; cls: string}> = {
   listing: {label: 'ยืนยันแค่ลิงก์ประกาศ', cls: 'bg-zinc-200 text-ink'},
   gallery_failed: {label: 'ยังเปิดรูปประกาศไม่ได้', cls: 'bg-amber-100 text-amber-900'},
 }
-export const MAX_REAL = 6
+const MAX_REAL = 6
 
 // เลือกสินค้าจริงจาก Shopee (snapshot คงที่) ตามสไตล์ ไม่นับในงบ/ความกว้าง ไม่มีราคา/สต็อก ไม่แสดงรูปของร้านค้า
 // all = ทุกรายการใน snapshot (รวมที่ยังไม่จัดเข้าสไตล์ของแอป) เลือกข้ามสไตล์ได้ ยังจำกัด MAX_REAL ชิ้น

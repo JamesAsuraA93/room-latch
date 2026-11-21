@@ -34,6 +34,13 @@ Publishing needs both image paths and `consent_at` (DB check). Images go to Obje
 Deleting a profile cascades to its designs, items, likes and saves; the app must also delete the
 files under `designs/<id>/`. Shopee seller photos are never stored.
 
+## AI render jobs
+
+`render_jobs` holds the status of renders run by the OpenAI provider (production) and backs the daily
+limits; the output image is at `renders/<job id>.png` in Object storage. Rows and images are purged 24 hours
+after a job starts. `client_key` is a hash of the caller's IP, never the address. Existing databases need
+`db/migrations/002-render-jobs.sql`. `npm run test:db` exercises the store in a rolled-back transaction.
+
 `checks.sql` exercises these rules in a rolled-back transaction and prints `checks ok`.
 
 ## Load into Neon

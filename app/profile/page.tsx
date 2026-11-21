@@ -6,7 +6,9 @@ import {ShieldCheck, User} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger} from '@/components/ui/dialog'
 import {fill, t} from '@/lib/copy'
-import {DRAFTS_KEY, PLACEMENT_KEY, PLAN_KEY, ROOM_IMAGE_KEY, SOCIAL_KEY, readDrafts, readSocial} from '@/lib/demo'
+import {readDrafts, readSocial} from '@/lib/demo'
+import {authClient} from '@/lib/auth-client'
+import {DRAFTS_KEY, LAST_DESIGN_KEY, PLACEMENT_KEY, PLAN_KEY, PRODUCT_RENDER_KEY, ROOM_IMAGE_KEY, ROOM_IMAGES_KEY, SOCIAL_KEY, STYLE_REFERENCE_KEY} from '@/lib/storage-keys'
 
 const count = () => { const s = readSocial(); return {d: readDrafts().length, s: s.saves.length, p: s.posts.length} }
 
@@ -14,11 +16,13 @@ export default function Profile() {
   const [stats, setStats] = useState({d: 0, s: 0, p: 0})
   const [open, setOpen] = useState(false)
   const [done, setDone] = useState(false)
+  const {data: session} = authClient.useSession()
+  const user = session?.user
   useEffect(() => setStats(count()), [])
 
   function clearAll() {
     try { localStorage.removeItem(SOCIAL_KEY); localStorage.removeItem(DRAFTS_KEY) } catch {}
-    try { [PLAN_KEY, ROOM_IMAGE_KEY, 'room-ai-photos', 'room-ai-style-reference', 'room-ai-product-render', PLACEMENT_KEY, 'room-ai-last-design'].forEach(k => sessionStorage.removeItem(k)) } catch {}
+    try { [PLAN_KEY, ROOM_IMAGE_KEY, ROOM_IMAGES_KEY, STYLE_REFERENCE_KEY, PRODUCT_RENDER_KEY, PLACEMENT_KEY, LAST_DESIGN_KEY].forEach(k => sessionStorage.removeItem(k)) } catch {}
     setStats(count()); setOpen(false); setDone(true)
   }
 
@@ -29,13 +33,15 @@ export default function Profile() {
       <section className="flex items-center gap-4 rounded-3xl bg-brand-soft p-4">
         <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white text-brand"><User className="size-7" /></span>
         <div className="min-w-0 space-y-1">
-          <p className="font-semibold text-zinc-900">{t.guest}</p>
-          <p className="text-xs text-zinc-600">{t.guestHint}</p>
+          <p className="truncate font-semibold text-zinc-900">{user ? user.name : t.guest}</p>
+          <p className="truncate text-xs text-zinc-600">{user ? user.email : t.guestHint}</p>
           <p className="text-xs font-medium text-ink">{fill(t.stats, stats)}</p>
         </div>
       </section>
 
-      <Button asChild variant="outline" className="w-full"><Link href="/login">{t.login}</Link></Button>
+      {user
+        ? <Button variant="outline" className="w-full" onClick={() => authClient.signOut()}>{t.signOut}</Button>
+        : <Button asChild variant="outline" className="w-full"><Link href="/login">{t.login}</Link></Button>}
 
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 font-semibold"><ShieldCheck className="size-5 text-sage" />{t.privacyTitle}</h2>

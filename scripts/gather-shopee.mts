@@ -19,7 +19,8 @@ import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import path from 'node:path'
 import pg from 'pg'
-import {APP_STYLES, REAL_CATEGORIES} from '../lib/real-catalog.ts'
+import {REAL_CATEGORIES} from '../lib/real-catalog.ts'
+import {STYLE_IDS, isStyleId} from '../lib/styles.ts'
 
 type Cat = typeof REAL_CATEGORIES[number]
 export type Candidate = {shop: number; item: number; title: string; image: string; price: number | null; rating: number | null; shopName: string | null; hints: Set<string>}
@@ -60,7 +61,7 @@ export function cleanDecisions(raw: any, ids: Set<string>): Decision[] {
   const items = Array.isArray(raw?.items) ? raw.items : []
   return items.flatMap((d: any) => {
     if (!d?.keep || !ids.has(d.id) || !REAL_CATEGORIES.includes(d.category)) return []
-    const styles = [...new Set((d.styles ?? []).filter((s: string) => APP_STYLES.includes(s)))] as string[]
+    const styles = [...new Set((d.styles ?? []).filter(isStyleId))] as string[]
     return styles.length ? [{id: d.id, keep: true, category: d.category, styles}] : []
   })
 }
@@ -91,7 +92,7 @@ const SCHEMA = {
   type: 'object', additionalProperties: false, required: ['items'],
   properties: {items: {type: 'array', items: {type: 'object', additionalProperties: false, required: ['id', 'keep', 'category', 'styles'],
     properties: {id: {type: 'string'}, keep: {type: 'boolean'}, category: {type: 'string', enum: [...REAL_CATEGORIES]},
-      styles: {type: 'array', items: {type: 'string', enum: APP_STYLES}}}}}},
+      styles: {type: 'array', items: {type: 'string', enum: STYLE_IDS}}}}}},
 }
 
 const PROMPT = `You classify Shopee Thailand listings for an interior-design app. For EVERY input line return one item.
@@ -183,20 +184,35 @@ async function main() {
   const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL
   if (!url) throw new Error('DATABASE_URL_UNPOOLED or DATABASE_URL is not set')
   const bin = process.env.ROOMLATCH_CODEX_BIN || '/opt/homebrew/bin/codex'
-  const client = new pg.Client({connectionString: url})
-  await client.connect()
-  try {
+  // Codex decisions (kept or dropped) are cached per item id so a rerun or crash never pays for them twice.
+  const cachePath = process.env.GATHER_CACHE || path.join(process.cwd(), '.gather-decisions.json')
+  const cache: Record<string, Decision | null> = await readFile(cachePath, 'utf8').then(JSON.parse, () => ({}))
+  const withDb = async <T,>(f: (c: pg.Client) => Promise<T>) => {
+    // Short-lived connections: Neon suspends idle computes during the long Codex phase.
+    const client = new pg.Client({connectionString: url})
+    await client.connect()
+    try { return await f(client) } finally { await client.end() }
+  }
+  {
     const found = await gather(Math.max(1, Number(process.env.GATHER_PAGES) || 1))
-    const known = new Set((await client.query<{id: string}>('select id from shopee_listings')).rows.map(r => r.id))
+    const known = await withDb(async c => new Set((await c.query<{id: string}>('select id from shopee_listings')).rows.map(r => r.id)))
     const fresh = [...found.values()].filter(c => !known.has(idOf(c)))
-    console.log(`found ${found.size} unique items, ${fresh.length} new to classify`)
+    const todo = fresh.filter(c => !(idOf(c) in cache))
+    console.log(`found ${found.size} unique items, ${fresh.length} not in DB, ${todo.length} to classify`)
 
+    let saving = Promise.resolve()
     const batches: Candidate[][] = []
-    for (let i = 0; i < fresh.length; i += 120) batches.push(fresh.slice(i, i + 120))
-    const decided = (await pool(batches, 3, async b => {
-      try { const d = await codexDecide(b, bin); console.log(`codex kept ${d.length}/${b.length}`); return d }
-      catch (e) { console.warn(`codex batch skipped: ${(e as Error).message}`); return [] }
-    })).flat()
+    for (let i = 0; i < todo.length; i += 120) batches.push(todo.slice(i, i + 120))
+    await pool(batches, 3, async b => {
+      try {
+        const d = await codexDecide(b, bin)
+        for (const c of b) cache[idOf(c)] = null
+        for (const x of d) cache[x.id] = x
+        await (saving = saving.then(() => writeFile(cachePath, JSON.stringify(cache)))) // serialized: workers share one file
+        console.log(`codex kept ${d.length}/${b.length}`)
+      } catch (e) { console.warn(`codex batch skipped: ${(e as Error).message}`) }
+    })
+    const decided = fresh.map(c => cache[idOf(c)]).filter((d): d is Decision => !!d)
 
     const byId = new Map(fresh.map(c => [idOf(c), c]))
     const ok = await pool(decided, 8, async d => (await imageLoads(byId.get(d.id)!.image)) ? d : null)
@@ -205,20 +221,20 @@ async function main() {
 
     // Refresh price/rating/image for search rows seen again (no reclassification).
     const seen = [...found.values()].filter(c => known.has(idOf(c)))
-    if (!dry) {
+    if (!dry) await withDb(async client => {
       await upsert(client, rows)
       for (const c of seen) await client.query(
         `update shopee_listings set image_url = $2, price_thb = $3, rating = $4, shop_name = $5, checked_on = current_date where id = $1 and source = 'search'`,
         [idOf(c), IMG(c.image), c.price, c.rating, c.shopName])
-    }
+    })
 
-    const {rows: counts} = await client.query(
+    const {rows: counts} = await withDb(client => client.query(
       `select s.style_id, l.category, count(*)::int n from shopee_listings l join shopee_listing_styles s on s.listing_id = l.id
-        group by 1, 2 order by 1, 2`)
+        group by 1, 2 order by 1, 2`))
     const per: Record<string, Record<string, number>> = {}
     for (const r of counts) (per[r.style_id] ??= {})[r.category] = r.n
     console.table(Object.fromEntries(Object.entries(per).map(([s, c]) => [s, {...c, total: Object.values(c).reduce((a, b) => a + b, 0)}])))
-  } finally { await client.end() }
+  }
 }
 
 if (import.meta.main) main().catch(e => { console.error(e.message); process.exit(1) })

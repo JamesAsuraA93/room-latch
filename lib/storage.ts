@@ -6,12 +6,10 @@ import 'server-only'
 import {DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client} from '@aws-sdk/client-s3'
 import {getSignedUrl} from '@aws-sdk/s3-request-presigner'
 
-export const ASSETS_BUCKET = 'assets'
-
 let client: S3Client | undefined
 const s3 = () => (client ??= new S3Client({forcePathStyle: true})) // Neon requires path-style addressing
 
-const Bucket = ASSETS_BUCKET
+const Bucket = 'assets'
 const files = {
   async upload(Key: string, Body: string | Uint8Array, {contentType}: {contentType: string}) {
     await s3().send(new PutObjectCommand({Bucket, Key, Body, ContentType: contentType}))
@@ -26,27 +24,9 @@ const files = {
     const res = await s3().send(new GetObjectCommand({Bucket, Key}))
     return {text: () => res.Body!.transformToString(), bytes: () => res.Body!.transformToByteArray()}
   },
-  url: (Key: string, {expiresIn = 3600}: {expiresIn?: number} = {}) => getSignedUrl(s3(), new GetObjectCommand({Bucket, Key}), {expiresIn}),
+  /** Presigned GET. `downloadName` makes the browser save the file under that name instead of opening it. */
+  url: (Key: string, {expiresIn = 3600, downloadName}: {expiresIn?: number; downloadName?: string} = {}) =>
+    getSignedUrl(s3(), new GetObjectCommand({Bucket, Key, ResponseContentDisposition: downloadName && `attachment; filename="${downloadName}"`}), {expiresIn}),
   async delete(Key: string) { await s3().send(new DeleteObjectCommand({Bucket, Key})) },
 }
 export const storage = () => files
-
-/** Object key for a design image; matches the path CHECK in db/schema.sql (designs.before_path / after_path). */
-export const designImageKey = (designId: string, side: 'before' | 'after', ext: 'jpg' | 'webp' | 'png') => {
-  if (!/^[0-9a-f-]{36}$/.test(designId)) throw new Error('bad design id')
-  if (side === 'before' && ext === 'png') throw new Error('before must be jpg or webp')
-  return `designs/${designId}/${side}.${ext}`
-}
-
-/** Compatibility helpers for callers using the original upload API. */
-export async function uploadObject(key: string, body: Uint8Array | string, contentType = 'application/octet-stream') {
-  await files.upload(key, body, {contentType})
-  return {key}
-}
-
-export async function getObjectUrl(key: string, expiresIn = 3600) {
-  if (!Number.isInteger(expiresIn) || expiresIn < 1 || expiresIn > 604800) {
-    throw new Error('expiresIn must be an integer from 1 to 604800 seconds')
-  }
-  return files.url(key, {expiresIn})
-}

@@ -3,6 +3,7 @@
 // Schema/seed live in db/*.sql and are applied with DATABASE_URL_UNPOOLED, not from the app.
 import {Pool} from 'pg'
 import {attachDatabasePool} from '@vercel/functions'
+import type {RealProduct} from '@/lib/real-catalog'
 
 const g = globalThis as unknown as {__rlPool?: Pool}
 
@@ -21,14 +22,37 @@ export type DbListing = {id: string; title: string; category: string; url: strin
 /** Real Shopee listings for one app style (no price/stock: the table has none). */
 export async function listingsForStyle(style: string): Promise<DbListing[]> {
   const {rows} = await db().query<DbListing>(
-    `select l.id, l.title, l.category, l.url, l.verification, l.dimensions_cm
-       from shopee_listings l join shopee_listing_styles s on s.listing_id = l.id
-      where s.style_id = $1
-      order by l.category, l.title
-      limit 100`,
+    // 20 per category so 100 rows cover all five; hand-checked rows first, then best-rated search finds.
+    `select id, title, category, url, verification, dimensions_cm from (
+       select l.*, row_number() over (partition by l.category order by (l.source = 'search'), l.rating desc nulls last, l.title) as k
+         from shopee_listings l join shopee_listing_styles s on s.listing_id = l.id
+        where s.style_id = $1) t
+      where k <= 20
+      order by category, k`,
     [style],
   )
   return rows
+}
+
+/** Result page catalog: per style, the same top 20 per category as listingsForStyle, with every style tag. */
+export async function realListings(): Promise<RealProduct[]> {
+  const {rows} = await db().query<RealProduct>(
+    `with ranked as (
+       select l.id, row_number() over (partition by s.style_id, l.category order by (l.source = 'search'), l.rating desc nulls last, l.title) as k
+         from shopee_listings l join shopee_listing_styles s on s.listing_id = l.id)
+     select l.id, l.title, l.category, l.url, l.verification, l.dimensions_cm as dimensions, l.notes,
+            (select array_agg(style_id order by style_id) from shopee_listing_styles where listing_id = l.id) as styles
+       from shopee_listings l
+      where l.id in (select id from ranked where k <= 20)
+      order by l.category, l.title`)
+  return rows
+}
+
+/** Titles for listing ids (render allowlist); unknown ids are simply absent. */
+export async function listingTitles(ids: string[]): Promise<[string, string][]> {
+  if (!ids.length) return []
+  const {rows} = await db().query<{id: string; title: string}>('select id, title from shopee_listings where id = any($1)', [ids])
+  return rows.map(r => [r.id, r.title])
 }
 
 export type DbFeedPost = {
@@ -61,4 +85,39 @@ export async function publishedImagePath(id: string, side: 'before' | 'after'): 
   const {rows} = await db().query<{path: string | null}>(
     `select ${side === 'before' ? 'before_path' : 'after_path'} as path from designs where id = $1 and published_at is not null`, [id])
   return rows[0]?.path ?? null
+}
+
+export type AdminOverview = {
+  totals: {listings: number; search: number; curated: number; users: number; designs: number; published: number; likes: number; saves: number}
+  grid: {style: string; category: string; n: number}[]
+  recentListings: {id: string; title: string; category: string; url: string; price_thb: string | null; rating: number | null; shop_name: string | null; checked_on: string}[]
+  users: {user_id: string; handle: string; display_name: string; email: string | null; created_at: string; designs: number; published: number}[]
+  recentDesigns: {id: string; handle: string; style_id: string; room_type: string; title: string | null; created_at: string; published_at: string | null}[]
+}
+
+/** Everything /admin shows, in one round trip per section. Admin-only: caller must gate. */
+export async function adminOverview(): Promise<AdminOverview> {
+  const q = async <T,>(sql: string) => (await db().query(sql)).rows as T[]
+  const [[totals], grid, recentListings, users, recentDesigns] = await Promise.all([
+    q<AdminOverview['totals']>(`select
+       (select count(*)::int from shopee_listings) listings,
+       (select count(*)::int from shopee_listings where source = 'search') search,
+       (select count(*)::int from shopee_listings where source <> 'search') curated,
+       (select count(*)::int from profiles) users,
+       (select count(*)::int from designs) designs,
+       (select count(*)::int from designs where published_at is not null) published,
+       (select count(*)::int from design_likes) likes,
+       (select count(*)::int from design_saves) saves`),
+    q<AdminOverview['grid'][number]>(`select s.style_id style, l.category, count(*)::int n
+       from shopee_listings l join shopee_listing_styles s on s.listing_id = l.id group by 1, 2`),
+    q<AdminOverview['recentListings'][number]>(`select id, title, category, url, price_thb, rating, shop_name, checked_on::text
+       from shopee_listings order by checked_on desc, rating desc nulls last limit 50`),
+    q<AdminOverview['users'][number]>(`select p.user_id, p.handle, p.display_name, u.email, p.created_at::text,
+       count(d.id)::int designs, count(d.published_at)::int published
+       from profiles p left join "user" u on u.id = p.user_id left join designs d on d.owner_id = p.user_id
+       group by p.user_id, u.email order by p.created_at desc limit 200`),
+    q<AdminOverview['recentDesigns'][number]>(`select d.id, p.handle, d.style_id, d.room_type, d.title, d.created_at::text, d.published_at::text
+       from designs d join profiles p on p.user_id = d.owner_id order by d.created_at desc limit 50`),
+  ])
+  return {totals, grid, recentListings, users, recentDesigns}
 }

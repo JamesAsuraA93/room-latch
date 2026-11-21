@@ -1,10 +1,11 @@
 import type {Product} from '@/lib/plan'
+import {STYLE_IDS} from './styles.ts'
 
 // ของตัวอย่าง (fixture) สำหรับมุมทำงานคอนโด: โต๊ะ เก้าอี้ ไฟ ครบทุกสไตล์ที่ UI เลือกได้
 // ราคา/ขนาด/รุ่นเป็นค่าสมมติของทีม ไม่ใช่สินค้าจริงบน Shopee ชื่อลงท้าย (fixture) เสมอ ปุ่มเป็นหน้าค้นหา ไม่ใช่ประกาศ
 // เก้าอี้เก็บใต้โต๊ะได้ จึงไม่นับความกว้างพื้น (floor: false) แต่ยังต้องไม่กว้างเกินมุม
 export const FIXTURE_TAG = '(fixture)'
-const ALL = ['minimal', 'muji', 'japandi', 'scandi', 'loft', 'luxe', 'boho', 'nordic']
+const ALL = [...STYLE_IDS]
 const NATURAL = ['japandi', 'muji', 'scandi', 'nordic', 'minimal']
 
 // LISTING = ประกาศ Shopee จริงที่ทีมเปิดดูหน้าสินค้าแล้ว (Chrome อ่านอย่างเดียว 21 พ.ย. 2026) ยืนยันแค่ชื่อสินค้า/ลิงก์

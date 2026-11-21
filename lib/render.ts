@@ -1,19 +1,17 @@
 // Pure validation + mock for POST /api/render. No Next imports so Node tests can load it directly.
 // The mock never receives, stores or forwards user photos: the "after" image is composited in the browser.
 import {createHash} from 'node:crypto'
+import {ROOM_TYPE_IDS, STYLE_IDS, isRoomTypeId, isStyleId} from './styles.ts'
 
-// Must equal STYLES ids in lib/demo.ts (asserted in scripts/render.test.mts). Duplicated because demo.ts is not Node-loadable.
-export const RENDER_STYLES = ['minimal', 'muji', 'japandi', 'scandi', 'loft', 'luxe', 'boho', 'nordic'] as const
-export const RENDER_ROOM_TYPES = ['condo', 'bedroom', 'living', 'empty', 'cluttered'] as const
-export const PROMPT_VERSION = 'v1'
+const PROMPT_VERSION = 'v1'
 export const MAX_BODY_BYTES = 16 * 1024
 export const MAX_ITEMS = 12
 
-export type RenderItem = {id: string; x: number; y: number; w: number}
+type RenderItem = {id: string; x: number; y: number; w: number}
 export type RenderInput = {styleId: string; roomType: string; budget: number; width: number; items: RenderItem[]}
 export type RenderError = {status: number; code: string; message: string}
-export type RenderResult = {ok: true; input: RenderInput} | {ok: false; error: RenderError}
-export type RenderResponse = {
+type RenderResult = {ok: true; input: RenderInput} | {ok: false; error: RenderError}
+type RenderResponse = {
   status: 'completed'
   provider: 'mock'
   jobId: string
@@ -56,8 +54,8 @@ export function validateRenderInput(body: unknown): RenderResult {
   const extra = Object.keys(body).filter(k => !KEYS.includes(k))
   if (extra.length) return fail('unknown_field', `Unknown field(s): ${extra.join(', ').slice(0, 200)}`)
   const {styleId, roomType, budget, width, items} = body
-  if (typeof styleId !== 'string' || !(RENDER_STYLES as readonly string[]).includes(styleId)) return fail('unsupported_style', `styleId must be one of: ${RENDER_STYLES.join(', ')}`)
-  if (typeof roomType !== 'string' || !(RENDER_ROOM_TYPES as readonly string[]).includes(roomType)) return fail('invalid_room_type', `roomType must be one of: ${RENDER_ROOM_TYPES.join(', ')}`)
+  if (!isStyleId(styleId)) return fail('unsupported_style', `styleId must be one of: ${STYLE_IDS.join(', ')}`)
+  if (!isRoomTypeId(roomType)) return fail('invalid_room_type', `roomType must be one of: ${ROOM_TYPE_IDS.join(', ')}`)
   if (!intIn(budget, 1, 1_000_000)) return fail('invalid_number', 'budget must be an integer 1..1000000.')
   if (!intIn(width, 1, 1_000)) return fail('invalid_number', 'width must be an integer 1..1000 (cm).')
   if (!Array.isArray(items) || items.length > MAX_ITEMS) return fail('invalid_items', `items must be an array of 0..${MAX_ITEMS}.`)
