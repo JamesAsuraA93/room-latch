@@ -30,7 +30,8 @@ export const ROOM_TYPES = ROOM_TYPE_IDS
 export const roomName = (id: string) => (t as Record<string, string>)[id] ?? id
 
 /** สิ่งที่ผู้ใช้เลือกตลอด flow เก็บใน sessionStorage */
-export type Plan = {style: string; roomType: string; budget: number; width: number; sample?: boolean; remixOf?: string}
+// need = what the user most wants from the room, in their own words (sent to the product-picking model as data)
+export type Plan = {style: string; roomType: string; budget: number; width: number; need?: string; sample?: boolean; remixOf?: string}
 // ค่าเริ่มต้นคือสถานการณ์เดโม: มุมทำงานคอนโด 80 ซม. งบ 5,000
 export const DEFAULT_PLAN: Plan = {style: 'japandi', roomType: 'condo', budget: 5000, width: 80}
 // ปุ่มค่าลัดของช่องงบ/ความกว้าง ใช้ทั้งหน้าตั้งค่าและหน้าผลลัพธ์

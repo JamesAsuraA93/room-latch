@@ -164,12 +164,19 @@ create table render_jobs (
   check ((status = 'running') = (finished_at is null))
 );
 
+-- Decision-model calls made by POST /api/recommend: back its daily limits. Purged after 24 hours.
+create table recommend_calls (
+  client_key text not null,                 -- hash of the caller's IP, never the raw address
+  at         timestamptz not null default now()
+);
+
 create index designs_feed_idx on designs (published_at desc) where published_at is not null;
 create index designs_owner_idx on designs (owner_id, updated_at desc);
 create index designs_remix_idx on designs (remix_of) where remix_of is not null;
 create index design_likes_user_idx on design_likes (user_id);
 create index design_saves_user_idx on design_saves (user_id, created_at desc);
 create index render_jobs_started_idx on render_jobs (started_at);
+create index recommend_calls_at_idx on recommend_calls (at);
 create index design_items_listing_idx on design_items (listing_id) where listing_id is not null;
 
 create index catalog_items_room_slot_idx on catalog_items (room_type, slot);

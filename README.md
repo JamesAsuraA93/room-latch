@@ -46,7 +46,9 @@ npm run build
 | `live-render-core.ts` | เลือก provider, gate ของ request, สร้าง prompt (pure, มี test) |
 | `live-render.ts` | ทางเข้าเดียวของ render job แล้วส่งต่อตาม provider |
 | `live-render-codex.ts` | provider ฝั่ง local: Codex CLI, job อยู่ใน memory + temp dir |
-| `live-render-openai.ts` | provider ฝั่ง production: OpenAI API, job อยู่ใน Postgres, รูปอยู่ใน Object Storage |
+| `live-render-openai.ts` | provider ฝั่ง production: OpenAI, job อยู่ใน Postgres, รูปผลลัพธ์อยู่ใน Object Storage |
+| `render-pipeline.ts`, `render-pipeline-core.ts` | pipeline ความแม่นของสินค้า: ตัดสินค้า → ขนาดจริง → วางตามสเกล → gen (core เป็น pure, มี test) |
+| `recommend.ts`, `recommend-core.ts` | ขั้นเลือกสินค้า: AI เลือกสินค้าจริงจาก DB ให้ลงงบ (core เป็น pure, มี test) |
 | `render-jobs.ts` | table `render_jobs`: สถานะ job + daily limit (มี test กับ Postgres จริง) |
 | `openai-render.ts` | เรียก OpenAI Images Edits API |
 
@@ -59,9 +61,37 @@ npm run build
 | `codex` | เครื่อง dev | สั่ง Codex CLI ที่ล็อกอินไว้ในเครื่อง รับเฉพาะ request จาก loopback และถูกปิดเสมอบน Vercel |
 | `openai` | production (ใช้ในเครื่องได้ด้วย) | เรียก OpenAI Images API ด้วย `OPENAI_API_KEY`, `OPENAI_IMAGE_MODEL`, `OPENAI_IMAGE_QUALITY` |
 
-ทั้งสอง provider ใช้ API, prompt และ validation ชุดเดียวกัน (`lib/live-render.ts`) ไม่มี fallback ข้าม provider
+ทั้งสอง provider ใช้ API และ validation ชุดเดียวกัน (`lib/live-render.ts`) ไม่มี fallback ข้าม provider
 
 Flow: `POST /api/render/live` (multipart: รูปห้อง 1–4, รูปสินค้า ≤6, รูปสไตล์ ≤1, ต้องมี `consent=yes`) → poll `GET /api/render/live/[id]` → `GET /api/render/live/[id]/image`
+
+### เลือกสินค้าให้ลงงบ (`POST /api/recommend`)
+
+หน้า result โหลดชุดสินค้าจริงให้อัตโนมัติจากสไตล์ ประเภทห้อง งบ ความกว้าง และ "ความต้องการหลัก" ที่ผู้ใช้พิมพ์ในหน้าเลือกสไตล์ (`lib/recommend.ts`):
+
+1. ดึง listing ของสไตล์นั้นจาก Postgres ที่มีราคา ราคาไม่เกินงบ และมีรูปให้ render ได้ เอาหมวดละ 30 ชิ้นที่เรตติ้งดีสุด
+2. decision model เลือก 2–6 ชิ้น ชิ้นละหนึ่งบทบาท พร้อมเหตุผลภาษาไทย
+3. server รวมราคาจาก DB เอง ไม่เชื่อตัวเลขจาก model ถ้าเกินงบจะให้เลือกใหม่ 1 ครั้ง ถ้ายังเกินจะตัดชิ้นแพงสุดออกจนลงงบ
+4. ไม่มี `OPENAI_API_KEY` หรือ model ล้มเหลว: ใช้กฎแทน (แบ่งงบตามบทบาท เลือกเรตติ้งดีสุดที่ใกล้สัดส่วน) และบอกผู้ใช้ว่าไม่ได้ใช้ AI
+
+ปุ่ม "ใช้ชุดนี้สร้างภาพในห้องของฉัน" ส่งทั้งชุดเข้า render panel โดยไม่ต้องแนบรูป ผลของแต่ละแผนเก็บไว้ในแท็บ จึงไม่เรียก model ซ้ำเมื่อกลับมาหน้าเดิม
+
+ข้อจำกัด: listing ไม่มีขนาดสินค้า ความกว้างจึงเป็นแค่คำแนะนำให้ model ไม่ได้บังคับ ราคาเป็นราคาวันที่เก็บข้อมูล ไม่รวมค่าส่ง endpoint นี้กันได้แค่ same-origin ยังไม่มี rate limit (ราว $0.01 ต่อครั้ง)
+
+### Pipeline ความแม่นของสินค้า (`openai`)
+
+เป้าหมายคือสินค้าในภาพต้องหน้าตา สี และ**ขนาด**ตรงของจริงบน Shopee มากที่สุด จึงไม่ให้ image model วาดสินค้าเองจากรูป listing ตรง ๆ (`lib/render-pipeline.ts`):
+
+1. **รูปสินค้า**: listing ใน DB ใช้รูปที่ copy ไว้ใน bucket (`listings/<shop>-<item>/original.*`) ถ้ายังไม่มีจึงดึงจาก CDN ของ Shopee เท่านั้น สินค้าที่ผู้ใช้แนบรูปเองใช้รูปนั้น
+2. **ตัดสินค้า**: image model แยกสินค้าชิ้นเดียวบนพื้นหลังโปร่งใส ตรวจว่ามี transparency จริง แล้ว cache ที่ `listings/<shop>-<item>/cutout.png` ตัดครั้งเดียวต่อสินค้า
+3. **ขนาดจริง (ซม.)**: vision model อ่านตามลำดับ ขนาดที่ยืนยันใน catalog → ตัวเลขในชื่อสินค้า → ตัวเลขในรูป → ขนาดทั่วไปของสินค้าชนิดนั้น cache ที่ `spec.json` พร้อมบอกว่ามาจากแหล่งไหน ความกว้างที่ผู้ใช้กรอกชนะเสมอ
+4. **วางตำแหน่ง**: vision model ดูรูปห้อง (และมุมอื่น/แปลน) ใช้ความกว้างที่ผู้ใช้วัดเป็นตัวยึดสเกล เทียบกับของขนาดมาตรฐานในห้อง แล้วตอบตำแหน่งและขนาดที่ควรเห็นในรูปของแต่ละชิ้น
+5. **แปะ**: `sharp` แปะ cutout ตามตำแหน่งและขนาดนั้น
+6. **gen**: image model ปรับแค่มุมมอง แสง และเงา ห้ามย้าย ย่อ ขยาย หรือเปลี่ยนหน้าตาสินค้า
+
+ทุกขั้นเป็น HTTP call ไป OpenAI, S3 และ `sharp` จึงรันบน Vercel ได้ ใช้เวลาราว 60 วินาทีเมื่อสินค้ายังไม่เคยถูกตัด และราว 40 วินาทีเมื่อ cache แล้ว (วัดในเครื่องกับสินค้า 3 ชิ้น) Codex (local) ยังใช้ prompt แบบเดิมโดยไม่ตัดหรือวางก่อน
+
+ข้อจำกัด: listing ส่วนใหญ่ไม่มีขนาดจริงในชื่อหรือรูป จึงได้ขนาดทั่วไป (`typical`, low confidence) ถ้ารูปประกาศมีหลายสี ระบบเลือกชิ้นที่เด่นที่สุด ซึ่งอาจไม่ใช่สีที่ผู้ใช้จะสั่ง
 
 ### Production (`openai`)
 
@@ -83,6 +113,7 @@ Flow: `POST /api/render/live` (multipart: รูปห้อง 1–4, รูป
 |---|---|
 | `GET /api/feed` | โพสต์ที่ publish แล้วจาก Postgres |
 | `GET /api/designs/[id]/before\|after` | redirect ไป presigned URL ของรูปใน bucket (เฉพาะ design ที่ publish) |
+| `POST /api/recommend` | สินค้าจริงที่ AI เลือกให้ลงงบ (ราคาจาก DB, fallback เป็นกฎเมื่อไม่มี key) |
 | `GET /api/listings?style=` | ประกาศ Shopee จริงตามสไตล์จาก Postgres (ยังไม่มีหน้าไหนเรียก) |
 | `POST /api/render` | mock ของขั้น loading: validate แล้วตอบ layout กลับ ไม่รับรูป ไม่สร้างภาพ |
 | `POST /api/neon/health` | smoke test Postgres + Storage เรียกได้จาก loopback เท่านั้น |

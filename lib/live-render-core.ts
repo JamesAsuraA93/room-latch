@@ -30,11 +30,16 @@ export function gateRequest(env: Env, headers: Headers, method: string): Gate {
   if (!provider) return {ok: false, status: 404, code: 'live_render_disabled'}
   const host = headers.get('host') ?? ''
   if (provider === 'codex' && !isLoopbackHost(host)) return {ok: false, status: 403, code: 'not_loopback'}
+  const refused = sameOriginRefusal(headers, method)
+  return refused ? {ok: false, status: 403, code: refused} : {ok: true, provider}
+}
+
+/** Only this app's own pages may call: no cross-site fetches, and state-changing requests carry this server's Origin. */
+export function sameOriginRefusal(headers: Headers, method: string): 'cross_site' | 'bad_origin' | null {
   const site = headers.get('sec-fetch-site')
-  if (site && site !== 'same-origin') return {ok: false, status: 403, code: 'cross_site'}
-  // state-changing requests must carry an Origin that is this server
-  if (method !== 'GET' && hostOf(headers.get('origin') ?? '') !== host) return {ok: false, status: 403, code: 'bad_origin'}
-  return {ok: true, provider}
+  if (site && site !== 'same-origin') return 'cross_site'
+  if (method !== 'GET' && hostOf(headers.get('origin') ?? '') !== (headers.get('host') ?? '')) return 'bad_origin'
+  return null
 }
 
 /**
