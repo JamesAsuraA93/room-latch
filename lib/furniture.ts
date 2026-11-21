@@ -51,6 +51,24 @@ export const furnitureTotal = (items: Furniture[]) => ({
   estimated: items.some(item => item.priceKind === 'estimate'),
 })
 
+/** Replace only broken-photo items. Keep the other choices, role, style and total budget intact. */
+export function replaceUnavailableFurniture(items: Furniture[], catalog: Furniture[], plan: {style: string; budget: number}, unavailable: ReadonlySet<string>) {
+  const kept = items.filter(item => !unavailable.has(item.id))
+  const replacements = new Map<string, Furniture>()
+  const unfilled: Furniture[] = []
+  for (const item of items.filter(item => unavailable.has(item.id))) {
+    const remaining = plan.budget - furnitureTotal([...kept, ...replacements.values()]).total
+    const replacement = catalog.filter(candidate => candidate.category === item.category && candidate.styles.includes(plan.style)
+      && !!candidate.image?.trim() && !unavailable.has(candidate.id) && candidate.priceKind === 'listed'
+      && candidate.price !== null && candidate.price <= remaining
+      && !kept.some(p => p.id === candidate.id) && ![...replacements.values()].some(p => p.id === candidate.id))
+      .sort((a, b) => Math.abs(a.price! - (item.price ?? remaining)) - Math.abs(b.price! - (item.price ?? remaining)))[0]
+    if (replacement) replacements.set(item.id, replacement)
+    else unfilled.push(item)
+  }
+  return {items: items.flatMap(item => unavailable.has(item.id) ? replacements.get(item.id) ?? [] : item), replacements, unfilled}
+}
+
 /** Prefer priced listings in the chosen style, with one item per furniture category. */
 export function recommendFurniture(all: Furniture[], plan: {style: string; roomType: string; budget: number}): Furniture[] {
   const groups: FurnitureCategory[][] = plan.roomType === 'living'

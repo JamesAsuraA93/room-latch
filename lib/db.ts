@@ -42,7 +42,9 @@ export async function realListings(): Promise<RealProduct[]> {
        select l.id, row_number() over (partition by s.style_id, l.category order by (l.source = 'search'), l.rating desc nulls last, l.title) as k
          from shopee_listings l join shopee_listing_styles s on s.listing_id = l.id)
      select l.id, l.title, l.category, l.url, l.verification, l.dimensions_cm as dimensions, l.notes,
-            l.price_thb::float8 as price, l.image_url as image,
+            l.price_thb::float8 as price,
+            case when coalesce(nullif(trim(l.image_path), ''), nullif(trim(l.image_url), '')) is not null
+                 then '/api/listings/' || l.id || '/image' else null end as image,
             (select array_agg(style_id order by style_id) from shopee_listing_styles where listing_id = l.id) as styles
        from shopee_listings l
       where l.id in (select id from ranked where k <= 20)
@@ -75,7 +77,8 @@ export async function recommendCandidates(style: string, budget: number, perCate
        select l.id, l.title, l.category, l.price_thb::float8 as price, l.rating,
               row_number() over (partition by l.category order by l.rating desc nulls last, l.price_thb) as k
          from shopee_listings l join shopee_listing_styles s on s.listing_id = l.id
-        where s.style_id = $1 and l.price_thb between 20 and $2 and (l.image_path is not null or l.image_url is not null)) t
+        where s.style_id = $1 and l.price_thb between 20 and $2
+          and coalesce(nullif(trim(l.image_path), ''), nullif(trim(l.image_url), '')) is not null) t
       where k <= $3
       order by category, k`,
     [style, budget, perCategory],

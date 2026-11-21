@@ -6,14 +6,16 @@ const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'sessionStor
 const originalFetch = globalThis.fetch
 const requests: Record<string, unknown>[] = []
 let fail = false
+let source = 'ai'
 Object.defineProperty(globalThis, 'sessionStorage', {configurable: true, value: {
   getItem: (key: string) => store.get(key) ?? null,
   setItem: (key: string, value: string) => store.set(key, value),
+  removeItem: (key: string) => store.delete(key),
 }})
 globalThis.fetch = async (_url, init) => {
   requests.push(JSON.parse(String(init?.body)))
   if (fail) return new Response('', {status: 503})
-  return Response.json({source: 'ai', items: [{id: 'shopee-1-2', title: 'โซฟา', category: 'seating', price: 2500}], total: 2500, budget: 5000, summary: 'มุมอ่านหนังสือ'})
+  return Response.json({source, items: [{id: 'shopee-1-2', title: 'โซฟา', category: 'seating', price: 2500, image: '/api/listings/shopee-1-2/image'}], total: 2500, budget: 5000, summary: 'มุมอ่านหนังสือ'})
 }
 try {
   const plan = {style: 'minimal', roomType: 'living', budget: 5000, width: 80, need: ' โซฟา 2 ที่นั่ง ไม่เอาพรม '}
@@ -37,6 +39,12 @@ try {
   fail = false
   await requestRecommendation(key, true)
   assert.equal(requests.length, 5, 'failed requests can be retried')
+  source = 'rules'
+  await requestRecommendation(key, true)
+  source = 'ai'
+  const recovered = await requestRecommendation(key)
+  assert.equal(recovered.source, 'ai')
+  assert.equal(requests.length, 7, 'rules fallback is not cached as a permanent answer')
   console.log('Recommendation request, needs, caching, deduplication and retry passed')
 } finally {
   globalThis.fetch = originalFetch

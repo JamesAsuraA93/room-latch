@@ -6,6 +6,7 @@ import {t} from '@/lib/copy'
 import {isRoomTypeId, isStyleId} from '@/lib/styles'
 import {listingUrl, MAX_NEED_CHARS} from '@/lib/recommend-core'
 import {recommend} from '@/lib/recommend'
+import {listingImagePath} from '@/lib/listing-image'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
       style: styleId, styleTh: labels[styleId] ?? styleId, roomType, roomTh: labels[roomType] ?? roomType,
       budget: budget as number, widthCm: width as number | undefined, need: need.replace(/[\x00-\x1f]/g, ' ').trim(),
     }, clientKey(req.headers))
-    return Response.json({...result, items: result.items.map(p => ({...p, url: listingUrl(p.id)}))}, {headers})
+    return Response.json({...result, items: result.items.map(p => ({...p, url: listingUrl(p.id), image: listingImagePath(p.id)}))}, {headers})
   } catch (e) {
     console.error('recommend failed', (e as Error).message)
     return err(503, 'recommend_unavailable')

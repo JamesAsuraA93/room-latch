@@ -47,7 +47,9 @@ export async function productPhoto(p: PipelineProduct, signal?: AbortSignal): Pr
   if (p.upload) return p.upload
   let bytes: Buffer | null = null
   if (p.listing?.imagePath) {
-    try { bytes = Buffer.from(await (await storage().download(p.listing.imagePath)).bytes()) } catch { signal?.throwIfAborted() }
+    const storageSignal = AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])])
+    try { bytes = Buffer.from(await (await storage().download(p.listing.imagePath, storageSignal)).bytes()) } catch { signal?.throwIfAborted() }
+    if (bytes && (bytes.length > PHOTO_MAX_BYTES || !sniffImage(new Uint8Array(bytes.subarray(0, 16))))) bytes = null
   }
   if (!bytes && p.listing?.imageUrl && isShopeeImageUrl(p.listing.imageUrl)) {
     const res = await fetch(p.listing.imageUrl, {signal, redirect: 'error'})

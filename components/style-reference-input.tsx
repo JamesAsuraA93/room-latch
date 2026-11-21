@@ -3,7 +3,7 @@ import {useCallback, useEffect, useRef, useState} from 'react'
 import {Button} from '@/components/ui/button'
 import {Card} from '@/components/ui/card'
 import {pickedFiles, pressProps, useFileDrop} from '@/lib/drop-zone'
-import {resizeRoomImage} from '@/lib/image'
+import {IMAGE_ACCEPT, imageUploadError, isImageFile, resizeRoomImage} from '@/lib/image'
 import {readStyleReference, saveStyleReference} from '@/lib/style-reference'
 
 export function StyleReferenceInput({onBusyChange}: {onBusyChange: (busy: boolean) => void}) {
@@ -18,14 +18,14 @@ export function StyleReferenceInput({onBusyChange}: {onBusyChange: (busy: boolea
     if (!files.length || processing.current) return
     setError('')
     if (files.length !== 1) { setError('เลือกภาพสไตล์อ้างอิงได้ครั้งละ 1 รูป'); return }
-    if (!files[0].type.startsWith('image/')) { setError('กรุณาเลือกไฟล์รูปภาพ'); return }
+    if (!isImageFile(files[0])) { setError('กรุณาเลือกไฟล์รูปภาพ'); return }
     processing.current = true
     setBusy(true); onBusyChange(true)
     try {
       const next = await resizeRoomImage(files[0], 1200)
       if (!saveStyleReference(next)) throw new Error('storage')
       setImage(next)
-    } catch { setError('บันทึกรูปไม่ได้ ลองใช้รูป JPG หรือ PNG ขนาดเล็กลง') }
+    } catch (error) { setError(imageUploadError(error)) }
     finally { processing.current = false; setBusy(false); onBusyChange(false) }
   }, [onBusyChange])
 
@@ -50,7 +50,7 @@ export function StyleReferenceInput({onBusyChange}: {onBusyChange: (busy: boolea
       </div>}
       {(busy || dragging) && <div role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/85 text-sm font-semibold text-brand">{busy ? 'กำลังเตรียมรูป…' : 'ปล่อยเพื่อใช้เป็นภาพสไตล์อ้างอิง'}</div>}
     </Card>
-    <input ref={input} type="file" accept="image/*" className="hidden" onChange={e => void choose(pickedFiles(e))} />
+    <input ref={input} type="file" accept={IMAGE_ACCEPT} className="hidden" onChange={e => void choose(pickedFiles(e))} />
     {image && <div className="flex items-center justify-between gap-2">
       <span className="text-xs text-zinc-500">แนบภาพสไตล์แล้ว · คลิกภาพเพื่อเปลี่ยน</span>
       <Button variant="ghost" disabled={busy} onClick={() => { if (saveStyleReference('')) { setImage(''); setError('') } else setError('ลบรูปไม่สำเร็จ กรุณาลองอีกครั้ง') }}>ลบภาพอ้างอิง</Button>

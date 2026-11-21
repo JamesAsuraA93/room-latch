@@ -20,8 +20,8 @@ const files = {
       throw e
     }
   },
-  async download(Key: string) {
-    const res = await s3().send(new GetObjectCommand({Bucket, Key}))
+  async download(Key: string, signal?: AbortSignal) {
+    const res = await s3().send(new GetObjectCommand({Bucket, Key}), {abortSignal: signal})
     return {text: () => res.Body!.transformToString(), bytes: () => res.Body!.transformToByteArray()}
   },
   /** Presigned GET. `downloadName` makes the browser save the file under that name instead of opening it. */

@@ -2,7 +2,7 @@ import type {Furniture} from './furniture.ts'
 import type {Job} from './live-render-core.ts'
 import {DESIGN_JOB_KEY, FURNITURE_SELECTION_KEY} from './storage-keys.ts'
 
-export type DesignSelection = {context: string; items: Furniture[]}
+export type DesignSelection = {context: string; items: Furniture[]; source?: 'ai' | 'rules'; notice?: string}
 export type DesignSession = {
   job: Job; items: Furniture[]; plan: {style: string; roomType: string; budget: number; width: number; areaM2?: number | null; need?: string}
   before: string; photoCount: number

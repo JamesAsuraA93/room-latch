@@ -44,24 +44,17 @@ npm run build
 | `storage.ts` | Object Storage ผ่าน AWS S3 client, ให้รูปด้วย presigned URL (server only) |
 | `render.ts`, `product-render.ts` | validate input ของ render API (pure, มี test) |
 | `live-render-core.ts` | เลือก provider, gate ของ request, สร้าง prompt (pure, มี test) |
-| `live-render.ts` | ทางเข้าเดียวของ render job แล้วส่งต่อตาม provider |
-| `live-render-codex.ts` | provider ฝั่ง local: Codex CLI, job อยู่ใน memory + temp dir |
-| `live-render-openai.ts` | provider ฝั่ง production: OpenAI, job อยู่ใน Postgres, รูปผลลัพธ์อยู่ใน Object Storage |
+| `live-render.ts` | ทางเข้าเดียวของ render job ผ่าน OpenAI API |
+| `live-render-codex.ts` | โค้ด legacy ไม่ถูกเรียกจากเส้นทางสร้างภาพปัจจุบัน |
+| `live-render-openai.ts` | OpenAI API ทั้ง local และ production, job อยู่ใน Postgres, รูปผลลัพธ์อยู่ใน Object Storage |
 | `render-pipeline.ts`, `render-pipeline-core.ts` | pipeline ความแม่นของสินค้า: ตัดสินค้า → ขนาดจริง → วางตามสเกล → gen (core เป็น pure, มี test) |
 | `recommend.ts`, `recommend-core.ts` | ขั้นเลือกสินค้า: AI เลือกสินค้าจริงจาก DB ให้ลงงบ (core เป็น pure, มี test) |
 | `render-jobs.ts` | table `render_jobs`: สถานะ job + daily limit (มี test กับ Postgres จริง) |
 | `openai-render.ts` | เรียก OpenAI Images Edits API |
 
-## สร้างภาพด้วย AI: local ใช้ Codex CLI, production ใช้ OpenAI API
+## สร้างภาพด้วย OpenAI API
 
-สวิตช์เดียวคือ `ROOMLATCH_RENDER_PROVIDER` ไม่ตั้ง = ปิดฟีเจอร์ (ปุ่มไม่โผล่, API ตอบ 404)
-
-| ค่า | ใช้ที่ไหน | ทำงานอย่างไร |
-|---|---|---|
-| `codex` | เครื่อง dev | สั่ง Codex CLI ที่ล็อกอินไว้ในเครื่อง รับเฉพาะ request จาก loopback และถูกปิดเสมอบน Vercel |
-| `openai` | production (ใช้ในเครื่องได้ด้วย) | เรียก OpenAI Images API ด้วย `OPENAI_API_KEY`, `OPENAI_IMAGE_MODEL`, `OPENAI_IMAGE_QUALITY` |
-
-ทั้งสอง provider ใช้ API และ validation ชุดเดียวกัน (`lib/live-render.ts`) ไม่มี fallback ข้าม provider
+ตั้ง `OPENAI_API_KEY` บนเซิร์ฟเวอร์เพื่อเปิดสร้างภาพ ทั้ง local และ production ใช้ OpenAI Images API โดยตรง ไม่เรียก Codex CLI และไม่ใช้ค่า `ROOMLATCH_RENDER_PROVIDER` แบบเก่า ตัวเลือกโมเดลอยู่ใน `OPENAI_IMAGE_MODEL` และ `OPENAI_IMAGE_QUALITY`
 
 Flow: `POST /api/render/live` (multipart: รูปห้อง 1–4, รูปสินค้า ≤6, รูปสไตล์ ≤1, ต้องมี `consent=yes`) → poll `GET /api/render/live/[id]` → `GET /api/render/live/[id]/image`
 

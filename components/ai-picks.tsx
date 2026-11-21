@@ -7,6 +7,7 @@ import {baht} from '@/lib/copy'
 import type {Plan} from '@/lib/demo'
 import type {RealCategory} from '@/lib/real-catalog'
 import {recommendationKey, requestRecommendation, type AiItem, type ClientRecommendation as Recommendation} from '@/lib/recommend-client'
+import {recommendationFailureMessage} from '@/lib/recommend-status'
 export type {AiItem} from '@/lib/recommend-client'
 
 
@@ -52,7 +53,7 @@ export function AiPicks({plan, onUse, measuredWidth = true}: {plan: Plan; measur
           ? <p className="text-sm text-zinc-500">ยังไม่มีสินค้าในสไตล์นี้ที่ราคาไม่เกินงบ ลองเพิ่มงบหรือเปลี่ยนสไตล์</p>
           : <>
             <p className="text-xs leading-6 text-zinc-500">
-              {rec.source === 'ai' ? 'AI เลือกจากสินค้าที่ได้คะแนนรีวิวดีในสไตล์นี้ ' : 'เลือกตามคะแนนรีวิวสูงสุดของแต่ละหมวดที่ยังอยู่ในงบ (ยังไม่ได้ใช้ AI) '}
+              {rec.source === 'ai' ? 'AI เลือกจากสินค้าที่ได้คะแนนรีวิวดีในสไตล์นี้ ' : `${recommendationFailureMessage(rec.fallbackReason)} — แสดงชุดสำรองตามสไตล์และงบ `}
               {rec.summary}
             </p>
             <ul className="space-y-2">

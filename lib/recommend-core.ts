@@ -7,7 +7,7 @@ export const MAX_NEED_CHARS = 300
 
 export type Candidate = {id: string; title: string; category: string; price: number; rating: number | null}
 export type Pick = Candidate & {reason: string}
-export type Recommendation = {source: 'ai' | 'rules'; items: Pick[]; total: number; budget: number; summary: string}
+export type Recommendation = {source: 'ai' | 'rules'; items: Pick[]; total: number; budget: number; summary: string; fallbackReason?: import('./recommend-status.ts').RecommendFailure}
 export type RecommendInput = {style: string; styleTh: string; roomType: string; roomTh: string; budget: number; widthCm?: number; need: string}
 
 const quote = (s: string) => JSON.stringify(s.replace(/[\x00-\x1f]/g, ' '))

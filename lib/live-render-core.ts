@@ -6,17 +6,14 @@ export type Provider = 'codex' | 'openai'
 type Env = Record<string, string | undefined>
 type Gate = {ok: true; provider: Provider} | {ok: false; status: number; code: string}
 
-/**
- * Which live provider is enabled. One switch, off unless set (fail closed):
- * - ROOMLATCH_RENDER_PROVIDER=codex  → local development. Drives this machine's signed-in Codex CLI, never on Vercel.
- * - ROOMLATCH_RENDER_PROVIDER=openai → production (also works locally). OpenAI Images API, needs OPENAI_API_KEY.
- * There is no fallback between providers: a failed job fails, it is never retried on the other one.
- */
+/** Room generation uses OpenAI API on both local and deployed servers. Legacy CLI flags are ignored. */
 export function liveProvider(env: Env): Provider | null {
-  const provider = env.ROOMLATCH_RENDER_PROVIDER
-  if (provider === 'codex') return env.VERCEL || env.VERCEL_ENV ? null : 'codex'
-  if (provider === 'openai') return env.OPENAI_API_KEY ? 'openai' : null
-  return null
+  return env.OPENAI_API_KEY?.trim() ? 'openai' : null
+}
+
+export function renderUnavailableReason(env: Env): string | undefined {
+  if (liveProvider(env)) return undefined
+  return 'ยังไม่ได้ตั้งค่า OpenAI API key สำหรับสร้างภาพบนเซิร์ฟเวอร์'
 }
 
 const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?$/i
@@ -24,12 +21,10 @@ export const isLoopbackHost = (host: string) => LOOPBACK.test(host)
 
 const hostOf = (origin: string) => { try { return new URL(origin).host } catch { return null } }
 
-/** Request gate: feature on, same-origin only, and Codex answers only requests made on this machine. */
+/** Request gate: API key configured, same-origin only. */
 export function gateRequest(env: Env, headers: Headers, method: string): Gate {
   const provider = liveProvider(env)
   if (!provider) return {ok: false, status: 404, code: 'live_render_disabled'}
-  const host = headers.get('host') ?? ''
-  if (provider === 'codex' && !isLoopbackHost(host)) return {ok: false, status: 403, code: 'not_loopback'}
   const refused = sameOriginRefusal(headers, method)
   return refused ? {ok: false, status: 403, code: refused} : {ok: true, provider}
 }

@@ -2,7 +2,7 @@
 import {useRef, useState} from 'react'
 import {demoProductImage, type Pos} from '@/lib/demo'
 import {EXACT_POS, defaultPos} from '@/components/room-compare'
-import {resizeRoomImage} from '@/lib/image'
+import {IMAGE_ACCEPT, resizeRoomImage} from '@/lib/image'
 import {t} from '@/lib/copy'
 import {Button} from '@/components/ui/button'
 import {Slider} from '@/components/ui/slider'
@@ -89,7 +89,7 @@ export function Placement({roomImage, items, value, onChange}: {roomImage: strin
           {!sel.image && <label className="block space-y-1">
             <span className="block text-sm font-semibold text-ink">{t.productPhoto}</span>
             <span className="block text-xs text-zinc-500">{t.productPhotoHint}</span>
-            <input type="file" accept="image/*" onChange={e => onPhoto(e, sel.id)}
+            <input type="file" accept={IMAGE_ACCEPT} onChange={e => onPhoto(e, sel.id)}
               className="block min-h-11 w-full text-sm file:mr-3 file:min-h-11 file:rounded-2xl file:border-0 file:bg-brand-soft file:px-4 file:text-brand-dark" />
           </label>}
           <Button variant="outline" className="w-full" onClick={() => onChange({...value, pos: without(value.pos, sel.id)})}>

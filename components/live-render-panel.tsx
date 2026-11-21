@@ -3,7 +3,7 @@ import {useEffect, useRef, useState} from 'react'
 import Link from 'next/link'
 import {ArrowDownToLine, ImagePlus, Plus, Sparkles, Trash2} from 'lucide-react'
 import {readStyleReference} from '@/lib/style-reference'
-import {resizeRoomImage} from '@/lib/image'
+import {IMAGE_ACCEPT, imageUploadError, isImageFile, resizeRoomImage} from '@/lib/image'
 import {pickedFiles, pressProps} from '@/lib/drop-zone'
 import {PRODUCT_RENDER_KEY} from '@/lib/storage-keys'
 import {Button} from '@/components/ui/button'
@@ -87,7 +87,7 @@ export function LiveRenderPanel({ready = true, roomImage, roomImages = [], produ
     if (option && files.length !== 1) { setError('เพิ่มรูปสินค้าได้ครั้งละ 1 รูปต่อชิ้น'); return }
     const base = option ? attached.filter(p => p.id !== option.id) : attached
     if (base.length + files.length > MAX_PRODUCT_IMAGES) { setError('เลือกสินค้าได้สูงสุด 6 ชิ้นต่อภาพ'); return }
-    if (files.some(f => !f.type.startsWith('image/'))) { setError('กรุณาใช้ไฟล์รูปภาพ JPG, PNG หรือ WebP'); return }
+    if (files.some(f => !isImageFile(f))) { setError('กรุณาใช้ไฟล์รูปภาพ JPG, PNG, WebP หรือ HEIC'); return }
     preparingRef.current = true; setPreparing(true)
     try {
       const added: AttachedProduct[] = []
@@ -96,7 +96,7 @@ export function LiveRenderPanel({ready = true, roomImage, roomImages = [], produ
         added.push({...option, id: option?.id || `custom-photo-${crypto.randomUUID()}`, name: option?.name || `สินค้าของฉัน ${base.length + i + 1}`, image})
       }
       update([...base, ...added])
-    } catch { setError('อ่านรูปไม่ได้ กรุณาลองไฟล์รูปอื่น') }
+    } catch (error) { setError(imageUploadError(error)) }
     finally { preparingRef.current = false; setPreparing(false) }
   }
   async function watch(id: string) {
@@ -207,7 +207,7 @@ export function LiveRenderPanel({ready = true, roomImage, roomImages = [], produ
         <p className="text-sm font-semibold">{preparing ? 'กำลังเตรียมรูป…' : full ? 'ครบ 6 ชิ้นแล้ว' : 'เพิ่มรูปสินค้า'}</p>
         <p className="mt-2 text-xs text-zinc-500">คลิก ลากวาง หรือวางด้วย Cmd+V / Ctrl+V</p>
       </div>
-      <input ref={chooser} type="file" accept="image/*" multiple className="hidden" onChange={e => { void addFiles(pickedFiles(e), target.current); target.current = null }} />
+      <input ref={chooser} type="file" accept={IMAGE_ACCEPT} multiple className="hidden" onChange={e => { void addFiles(pickedFiles(e), target.current); target.current = null }} />
 
       <div className="space-y-3">
         {attached.map((p, i) => (

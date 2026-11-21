@@ -1,7 +1,8 @@
 // Live render: create a job. Fail closed (see gateRequest). Never logs bodies or photos.
 import {readFileSync} from 'node:fs'
 import path from 'node:path'
-import {clientKey, gateRequest, INPUT_MAX_BYTES, sniffImage, type RenderImage, type StyleEntry} from '@/lib/live-render-core'
+import {clientKey, gateRequest, INPUT_MAX_BYTES, sameOriginRefusal, sniffImage, type RenderImage, type StyleEntry} from '@/lib/live-render-core'
+import {renderReadiness} from '@/lib/render-readiness'
 import {MAX_RENDER_BODY_BYTES, validateProductMeta} from '@/lib/product-render'
 import {MAX_ROOM_REFERENCES, startJob} from '@/lib/live-render'
 import {validateRenderInput} from '@/lib/render'
@@ -21,6 +22,13 @@ export const maxDuration = 300 // the OpenAI job finishes inside this request's 
 const FIELDS = ['image', 'floorPlan', 'roomArea', 'styleReference', 'productImage', 'productMeta', 'meta', 'consent', 'mode']
 const headers = {'Cache-Control': 'no-store'}
 const err = (status: number, code: string) => Response.json({error: {code}}, {status, headers})
+
+/** Read-only readiness check; does not start a job or spend model credits. */
+export async function GET(req: Request) {
+  const refused = sameOriginRefusal(req.headers, 'GET')
+  if (refused) return err(403, refused)
+  return Response.json(renderReadiness(process.env), {headers})
+}
 
 /** A refusal to send back. Thrown by the helpers so the handler reads top to bottom. */
 class Refusal { constructor(readonly status: number, readonly code: string) {} }
@@ -151,7 +159,6 @@ async function createJob(req: Request) {
     provider: gate.provider, clientKey: clientKey(req.headers), style, styleReference, products, floorPlan, roomAreaM2: area.value,
     room: rooms[0], roomReferences: rooms.slice(1),
     roomType: input.input.roomType, widthCm: mode === 'selection' ? undefined : input.input.width,
-    allowMissingProductPhotos: mode === 'selection',
     items: placed.map((item, i) => ({...item, name: productNames[i]})),
   })
   if (!started.ok) refuse(started.status, started.code)

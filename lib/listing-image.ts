@@ -1,4 +1,6 @@
 /** Remote product photos may only come from known Shopee CDNs. Redirects are disabled by the caller. */
+export const listingImagePath = (id: string): string | null => /^shopee-\d+-\d+$/.test(id) ? `/api/listings/${id}/image` : null
+
 export function isListingImageUrl(value: string): boolean {
   try {
     const url = new URL(value)

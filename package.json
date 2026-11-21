@@ -6,9 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node scripts/plan.test.mts && node scripts/render.test.mts && node scripts/live-render.test.mts && node scripts/real-catalog.test.mts && node scripts/room-images.test.mts && node scripts/furniture.test.mts && node scripts/render-pipeline.test.mts && node scripts/recommend.test.mts && node scripts/recommend-client.test.mts",
+    "test": "node scripts/plan.test.mts && node scripts/render.test.mts && node scripts/live-render.test.mts && node scripts/real-catalog.test.mts && node scripts/room-images.test.mts && node scripts/furniture.test.mts && node scripts/render-pipeline.test.mts && node scripts/recommend.test.mts && node scripts/recommend-client.test.mts && node scripts/image.test.mts",
     "test:db": "node --env-file=.env.local scripts/render-jobs.test.mts",
-    "db:seed": "node scripts/export-db-seed.mts > db/seed.sql"
+    "db:seed": "node scripts/export-db-seed.mts > db/seed.sql",
+    "check:products": "node scripts/check-products.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1175.0",
@@ -23,6 +24,7 @@
     "better-auth": "^1.7.27",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "heic-to": "1.6.7",
     "lucide-react": "^0.468.0",
     "next": "^16.4.6",
     "pg": "^8.23.1",

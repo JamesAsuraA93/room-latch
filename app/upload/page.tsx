@@ -7,14 +7,14 @@ import {Button} from '@/components/ui/button'
 import {Card} from '@/components/ui/card'
 import {RemixBanner} from '@/components/remix-banner'
 import {t} from '@/lib/copy'
-import {BEFORE, BUDGET_PRESETS, DEFAULT_PLAN, ROOM_TYPES, STYLES, readPlan, roomName, savePlan, styleImage} from '@/lib/demo'
-import {NumberField} from '@/components/number-field'
+import {BEFORE, DEFAULT_PLAN, ROOM_TYPES, STYLES, readPlan, roomName, savePlan, styleImage} from '@/lib/demo'
+import {BudgetField} from '@/components/budget-field'
 import {StyleReferenceInput} from '@/components/style-reference-input'
 import {FloorPlanInput} from '@/components/floor-plan-input'
 import {parseRoomArea} from '@/lib/floor-plan'
 import {MAX_NEED_CHARS} from '@/lib/recommend-core'
 import {MAX_ROOM_IMAGES, readRoomImages, saveRoomImages} from '@/lib/room-images'
-import {resizeRoomImage} from '@/lib/image'
+import {IMAGE_ACCEPT, imageUploadError, isImageFile, resizeRoomImage} from '@/lib/image'
 import {pickedFiles, pressProps, useFileDrop} from '@/lib/drop-zone'
 
 export default function Upload() {
@@ -57,7 +57,7 @@ export default function Upload() {
     setError('')
     const existing = sample ? [] : images
     if (existing.length + files.length > MAX_ROOM_IMAGES) { setError('เพิ่มได้สูงสุด 4 รูป กรุณาลบรูปเดิมหรือเลือกรูปให้น้อยลง'); return }
-    if (files.some(file => !file.type.startsWith('image/'))) { setError(t.invalidImage); return }
+    if (files.some(file => !isImageFile(file))) { setError(t.invalidImage); return }
     choosing.current = true
     setBusy(true)
     try {
@@ -67,7 +67,7 @@ export default function Upload() {
         if (!next.includes(image)) next.push(image)
       }
       keep(next, false)
-    } catch { setError(t.imageError) } finally { setBusy(false); choosing.current = false }
+    } catch (error) { setError(imageUploadError(error)) } finally { setBusy(false); choosing.current = false }
   }, [images, sample, keep])
 
   const full = !sample && images.length >= MAX_ROOM_IMAGES
@@ -105,8 +105,8 @@ export default function Upload() {
           {preview && sample && <span className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-xs text-white">ห้องตัวอย่าง</span>}
           {(dragging || busy) && <div role="status" className="absolute inset-0 flex items-center justify-center bg-white/85 font-semibold text-brand">{busy ? t.processing : 'ปล่อยเพื่อเพิ่มรูป'}</div>}
         </Card>
-        <input ref={camera} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => void choose(pickedFiles(e))} />
-        <input ref={gallery} type="file" multiple accept="image/*" className="hidden" onChange={e => void choose(pickedFiles(e))} />
+        <input ref={camera} type="file" accept={IMAGE_ACCEPT} capture="environment" className="hidden" onChange={e => void choose(pickedFiles(e))} />
+        <input ref={gallery} type="file" multiple accept={IMAGE_ACCEPT} className="hidden" onChange={e => void choose(pickedFiles(e))} />
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" disabled={busy || full} onClick={() => gallery.current?.click()}><Images className="size-4" />เลือกรูป</Button>
           <Button variant="outline" disabled={busy || full} onClick={() => camera.current?.click()}><Camera className="size-4" />ถ่ายรูป</Button>
@@ -151,7 +151,7 @@ export default function Upload() {
             </fieldset>
         </div>
         <div className="rounded-2xl border border-[#e6dfd7] bg-white p-4 sm:p-5">
-          <NumberField label="งบสูงสุดสำหรับสินค้า (บาท)" value={budget} onChange={setBudget} presets={BUDGET_PRESETS} />
+          <BudgetField value={budget} onChange={setBudget} />
         </div>
         <details className="rl-disclosure"><summary>เพิ่มภาพสไตล์ของคุณ (ไม่บังคับ)</summary><StyleReferenceInput onBusyChange={setReferenceBusy} /></details>
       </section>
