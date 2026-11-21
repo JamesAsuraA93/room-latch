@@ -1,6 +1,9 @@
-import {redirect} from 'next/navigation'
+import {FeedList} from '@/components/feed-list'
+import {PageHeader} from '@/components/page-header'
 
-// ฟีดย้ายไปรวมกับหน้าแรก เก็บ /feed ไว้ให้ลิงก์เก่ายังใช้ได้
 export default function Feed() {
-  redirect('/')
+  return <div className="space-y-6">
+    <PageHeader title="ห้องจากชุมชน">บันทึกไอเดียที่ชอบ หรือลองใช้กับห้องของคุณ</PageHeader>
+    <FeedList tabs />
+  </div>
 }

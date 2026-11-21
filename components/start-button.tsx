@@ -13,5 +13,5 @@ export function StartButton({className}: {className?: string}) {
 // ทางลัดเดโม: ข้ามขั้นตอน ไปผลลัพธ์ห้องตัวอย่างค่าเริ่มต้นทันที (ไม่แตะของที่เซฟไว้)
 export function DemoButton({className, variant = 'outline'}: {className?: string; variant?: 'outline' | 'ghost' | 'default'}) {
   const router = useRouter()
-  return <Button variant={variant} className={className} onClick={() => { startDemoSession(); router.push('/result') }}>{t.quickDemo}</Button>
+  return <Button variant={variant} className={className} onClick={() => { startDemoSession(); router.push('/upload') }}>{t.quickDemo}</Button>
 }

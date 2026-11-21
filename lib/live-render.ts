@@ -13,14 +13,16 @@ export type StartArgs = {
   provider: Provider
   clientKey: string // rate-limit bucket of the caller (see clientKey in lib/live-render-core.ts)
   room: RenderImage // the photo that gets edited
-  roomReferences?: RenderImage[] // other angles / floor plans of the same room
+  roomReferences?: RenderImage[] // other angles of the same room
+  floorPlan?: RenderImage
+  roomAreaM2?: number
   products?: ProductImage[]
   styleReference?: RenderImage
   style: StyleEntry
   items: PromptItem[]
 }
 
-export async function startJob({provider, clientKey, room, roomReferences = [], products = [], styleReference, style, items}: StartArgs): Promise<StartResult> {
+export async function startJob({provider, clientKey, room, roomReferences = [], products = [], styleReference, floorPlan, roomAreaM2, style, items}: StartArgs): Promise<StartResult> {
   if (products.length > MAX_PRODUCT_IMAGES) return {ok: false, status: 400, code: 'too_many_products'}
   if (roomReferences.length > MAX_ROOM_REFERENCES) return {ok: false, status: 400, code: 'image_count_1_to_4'}
 
@@ -33,12 +35,13 @@ export async function startJob({provider, clientKey, room, roomReferences = [], 
   }
   const inputFile = attach('input', room)
   const referenceFiles = roomReferences.map((reference, i) => attach(`reference-${i + 1}`, reference))
+  const floorPlanFile = floorPlan && attach('floor-plan', floorPlan)
   const productFiles: PromptProductFile[] = products.map((product, i) => {
     const file = attach(`product-${i + 1}`, product)
     return {id: product.id, file, imageIndex: attachments.length, widthCm: product.widthCm}
   })
   const styleFile = styleReference && attach('style-reference', styleReference)
-  const prompt = buildPrompt(style, items, inputFile, referenceFiles, styleFile, productFiles, provider)
+  const prompt = buildPrompt(style, items, inputFile, referenceFiles, styleFile, productFiles, provider, {floorPlanFile, roomAreaM2})
 
   return provider === 'codex' ? startCodexJob(attachments, prompt) : startOpenaiJob(attachments, prompt, clientKey)
 }

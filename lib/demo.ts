@@ -1,7 +1,9 @@
 import {t} from '@/lib/copy'
 import {EXAMPLE_POSTS} from '@/lib/feed-examples'
 import type {Product} from '@/lib/plan'
-import {DRAFTS_KEY, PLACEMENT_KEY, PLAN_KEY, PRODUCT_RENDER_KEY, RENDER_KEY, ROOM_IMAGE_KEY, ROOM_IMAGES_KEY, SOCIAL_KEY, STYLE_REFERENCE_KEY} from '@/lib/storage-keys'
+import type {Furniture} from './furniture.ts'
+import type {Job} from './live-render-core.ts'
+import {FLOOR_PLAN_KEY, FURNITURE_SELECTION_KEY, DRAFTS_KEY, PLACEMENT_KEY, PLAN_KEY, PRODUCT_RENDER_KEY, RENDER_KEY, ROOM_IMAGE_KEY, ROOM_IMAGES_KEY, SOCIAL_KEY, STYLE_REFERENCE_KEY} from '@/lib/storage-keys'
 import {ROOM_TYPE_IDS, STYLE_IDS, type StyleId} from '@/lib/styles'
 
 const u = (id: string, w = 800) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=75`
@@ -17,7 +19,7 @@ const STYLE_IMAGES: Record<StyleId, string> = {
   muji: 'photo-1600607687939-ce8a6c25118c',
   japandi: 'photo-1616486338812-3dadae4b4ace',
   scandi: 'photo-1615874694520-474822394e73',
-  loft: 'photo-1600566753190-17f0baa2a6c3',
+  loft: 'photo-1502672260266-1c1ef2d93688',
   luxe: 'photo-1600607687920-4e2a09cf159d',
   boho: 'photo-1618221195710-dd6b41faaea6',
   nordic: 'photo-1600210491892-03d54c0aaf87',
@@ -30,7 +32,7 @@ export const ROOM_TYPES = ROOM_TYPE_IDS
 export const roomName = (id: string) => (t as Record<string, string>)[id] ?? id
 
 /** สิ่งที่ผู้ใช้เลือกตลอด flow เก็บใน sessionStorage */
-export type Plan = {style: string; roomType: string; budget: number; width: number; sample?: boolean; remixOf?: string}
+export type Plan = {style: string; roomType: string; budget: number; width: number; areaM2?: number | null; sample?: boolean; remixOf?: string}
 // ค่าเริ่มต้นคือสถานการณ์เดโม: มุมทำงานคอนโด 80 ซม. งบ 5,000
 export const DEFAULT_PLAN: Plan = {style: 'japandi', roomType: 'condo', budget: 5000, width: 80}
 // ปุ่มค่าลัดของช่องงบ/ความกว้าง ใช้ทั้งหน้าตั้งค่าและหน้าผลลัพธ์
@@ -57,7 +59,7 @@ export const savePlan = (p: Partial<Plan>) => writeJson('session', PLAN_KEY, {..
 export function startDemoSession() {
   writeJson('session', PLAN_KEY, {...DEFAULT_PLAN, sample: true})
   writePlacement(EMPTY_PLACEMENT)
-  try { for (const key of [RENDER_KEY, ROOM_IMAGES_KEY, STYLE_REFERENCE_KEY, PRODUCT_RENDER_KEY]) sessionStorage.removeItem(key) } catch {}
+  try { for (const key of [FLOOR_PLAN_KEY, FURNITURE_SELECTION_KEY, RENDER_KEY, ROOM_IMAGES_KEY, STYLE_REFERENCE_KEY, PRODUCT_RENDER_KEY]) sessionStorage.removeItem(key) } catch {}
   try { sessionStorage.setItem(ROOM_IMAGE_KEY, BEFORE) } catch {}
 }
 
@@ -118,6 +120,6 @@ export function demoProductImage(name: string) {
 }
 
 // ---- Draft: บันทึกค่าที่เลือกไว้ใน localStorage เครื่องนี้ ไม่เก็บรูปใดๆ ----
-export type Draft = {id: string; savedAt: number; plan: Plan; items: string[]; locked: Product[]}
+export type Draft = {id: string; savedAt: number; plan: Plan; items: string[]; locked: Product[]; furniture?: Furniture[]; renderJob?: Job; photoCount?: number}
 export const readDrafts = () => readJson<{list: Draft[]}>('local', DRAFTS_KEY, {list: []}).list
 export const writeDrafts = (list: Draft[]) => writeJson('local', DRAFTS_KEY, {list})

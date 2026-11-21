@@ -5,7 +5,7 @@ import {TabBar} from '@/components/tab-bar'
 import {AppBar} from '@/components/app-bar'
 
 export const metadata: Metadata = {title: BRAND.name, description: t.homeSubtitle}
-export const viewport: Viewport = {viewportFit: 'cover', themeColor: '#b1947b', width: 'device-width', initialScale: 1}
+export const viewport: Viewport = {viewportFit: 'cover', themeColor: '#806149', width: 'device-width', initialScale: 1}
 
 // pb เผื่อความสูง tab bar (3.5rem) + ระยะห่าง + safe area ให้ปุ่มล่างสุดของทุกหน้าเลื่อนขึ้นมาเหนือแถบได้
 export default function RootLayout({children}: {children: React.ReactNode}) {
@@ -19,7 +19,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
       <body>
         <div className="rl-shell">
           <AppBar />
-          <main className="rl-surface">{children}</main>
+          <main id="main-content" className="rl-surface">{children}</main>
           <TabBar />
         </div>
       </body>

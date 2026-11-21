@@ -11,7 +11,7 @@ export const metadata = {title: `${t.login} · ${t.app}`}
 export default async function Login() {
   if (await currentUser()) redirect('/profile')
   return (
-    <div className="flex min-h-[calc(100dvh-9rem-env(safe-area-inset-bottom))] flex-col justify-center gap-5">
+    <div className="mx-auto flex max-w-md flex-col gap-6 py-6 md:py-10">
       <div>
         <PageHeader title={t.loginTitle}>{t.loginWhy}</PageHeader>
       </div>

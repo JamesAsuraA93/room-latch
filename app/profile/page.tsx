@@ -8,7 +8,7 @@ import {Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger} fr
 import {fill, t} from '@/lib/copy'
 import {readDrafts, readSocial} from '@/lib/demo'
 import {authClient} from '@/lib/auth-client'
-import {DRAFTS_KEY, LAST_DESIGN_KEY, PLACEMENT_KEY, PLAN_KEY, PRODUCT_RENDER_KEY, ROOM_IMAGE_KEY, ROOM_IMAGES_KEY, SOCIAL_KEY, STYLE_REFERENCE_KEY} from '@/lib/storage-keys'
+import {DESIGN_JOB_KEY, FLOOR_PLAN_KEY, FURNITURE_SELECTION_KEY, DRAFTS_KEY, LAST_DESIGN_KEY, PLACEMENT_KEY, PLAN_KEY, PRODUCT_RENDER_KEY, ROOM_IMAGE_KEY, ROOM_IMAGES_KEY, SOCIAL_KEY, STYLE_REFERENCE_KEY} from '@/lib/storage-keys'
 
 const count = () => { const s = readSocial(); return {d: readDrafts().length, s: s.saves.length, p: s.posts.length} }
 
@@ -22,12 +22,12 @@ export default function Profile() {
 
   function clearAll() {
     try { localStorage.removeItem(SOCIAL_KEY); localStorage.removeItem(DRAFTS_KEY) } catch {}
-    try { [PLAN_KEY, ROOM_IMAGE_KEY, ROOM_IMAGES_KEY, STYLE_REFERENCE_KEY, PRODUCT_RENDER_KEY, PLACEMENT_KEY, LAST_DESIGN_KEY].forEach(k => sessionStorage.removeItem(k)) } catch {}
+    try { [DESIGN_JOB_KEY, FLOOR_PLAN_KEY, FURNITURE_SELECTION_KEY, PLAN_KEY, ROOM_IMAGE_KEY, ROOM_IMAGES_KEY, STYLE_REFERENCE_KEY, PRODUCT_RENDER_KEY, PLACEMENT_KEY, LAST_DESIGN_KEY].forEach(k => sessionStorage.removeItem(k)) } catch {}
     setStats(count()); setOpen(false); setDone(true)
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader title={t.profileTitle} />
 
       <section className="flex items-center gap-4 rounded-3xl bg-brand-soft p-4">
@@ -43,12 +43,12 @@ export default function Profile() {
         ? <Button variant="outline" className="w-full" onClick={() => authClient.signOut()}>{t.signOut}</Button>
         : <Button asChild variant="outline" className="w-full"><Link href="/login">{t.login}</Link></Button>}
 
-      <section className="space-y-3">
-        <h2 className="flex items-center gap-2 font-semibold"><ShieldCheck className="size-5 text-sage" />{t.privacyTitle}</h2>
+      <details className="rl-disclosure">
+        <summary><span className="inline-flex items-center gap-2"><ShieldCheck className="size-4 text-sage" />{t.privacyTitle}</span></summary>
         <ul className="space-y-2">
           {t.privacyItems.split('|').map(item => <li key={item} className="rounded-2xl bg-zinc-50 px-3 py-2.5 text-sm text-zinc-700">{item}</li>)}
         </ul>
-      </section>
+      </details>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>

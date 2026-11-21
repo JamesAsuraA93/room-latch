@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {buildPrompt, childEnv, clientKey, gateRequest, isLoopbackHost, liveProvider, pngSize, sniffImage} from '../lib/live-render-core.ts'
 import {renderLimits, renderPath} from '../lib/render-jobs.ts'
 import {OPENAI_EDITS_URL, OpenaiRenderError, buildEditRequest, openaiEdit} from '../lib/openai-render.ts'
+import {codexFailureReason, elapsedLabel, isTerminalJob} from '../lib/render-outcome.ts'
+import {designError} from '../lib/design-errors.ts'
 
 const CODEX = {ROOMLATCH_RENDER_PROVIDER: 'codex'}
 const OPENAI = {ROOMLATCH_RENDER_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-test'}
@@ -67,6 +69,22 @@ assert.equal(pngSize(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, ...new Array(24).fi
 
 // prompt only from server data
 const p = buildPrompt({key: 'japandi', th: 'เจแปนดิ', prompt: 'ไม้โทนกลาง'}, [{id: 'fixture-desk-wood-80', name: 'โต๊ะทำงานไม้ 80 ซม.', x: 26, y: 51, w: 26}], 'input.jpg')
+assert.match(p, /copy that exact generated artifact returned by the tool into output.png/)
+assert.doesNotMatch(p, /do not read or write any other file/i)
+assert.match(p, /Do not copy an input photo or substitute a placeholder/)
+assert.equal(codexFailureReason('Generated the image, but the tool saved it in its default location. I couldn’t save it as output.png under your file-access restrictions.', 'no_output'), 'output_not_saved')
+assert.equal(codexFailureReason('Authentication required', 'codex_exit_1'), 'codex_auth_required')
+assert.equal(codexFailureReason('429 rate limit', 'no_output'), 'codex_rate_limited')
+assert.equal(codexFailureReason('The image generation tool is unavailable', 'no_output'), 'image_tool_unavailable')
+assert.equal(codexFailureReason('Unrecognized failure with private text', 'no_output'), 'no_output')
+assert.match(designError('no_output'), /ไม่ส่งไฟล์ภาพ/)
+assert.match(designError('output_not_saved'), /บันทึกไฟล์ผลลัพธ์/)
+assert.equal(elapsedLabel(1000, 1000), '0 วินาที')
+assert.equal(elapsedLabel(1795246899552, 1795246988248), '1 นาที 28 วินาที')
+assert.equal(elapsedLabel(0, 188696), '3 นาที 8 วินาที')
+assert.equal(elapsedLabel(1000), 'ไม่ทราบระยะเวลา')
+assert.equal(elapsedLabel(2000, 1000), 'ไม่ทราบระยะเวลา')
+for (const status of ['succeeded', 'failed', 'cancelled', 'running'] as const) assert.equal(isTerminalJob({id:'test',provider:'codex',startedAt:1,status}), status !== 'running')
 assert.match(p, /output\.png/); assert.match(p, /input\.jpg/); assert.match(p, /เจแปนดิ/); assert.match(p, /id=fixture-desk-wood-80/)
 // only the listed products: the style text is mood, never a shopping list (a real render once added a sofa, rug and plants)
 for (const provider of ['codex', 'openai'] as const) {

@@ -5,9 +5,12 @@ import Image from 'next/image'
 import {useRouter} from 'next/navigation'
 import {Bookmark, Trash2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
+import {StartButton} from '@/components/start-button'
 import {baht, t} from '@/lib/copy'
 import {readDrafts, roomName, savePlan, styleName, writeDrafts, writePlacement, type Draft, type FeedPost} from '@/lib/demo'
 import {useFeedPosts, useSocial} from '@/lib/use-feed'
+import {saveDesignSession, saveSelection} from '@/lib/design-session'
+import {selectionContext} from '@/lib/furniture'
 
 function Row({post, children}: {post: FeedPost; children?: React.ReactNode}) {
   return (
@@ -35,7 +38,11 @@ export default function Saved() {
     // draft ไม่ใช่ Remix และไม่รู้ว่ารูปห้องตอนนี้เป็นรูปตัวอย่างไหม ใช้สถานะรูปของแท็บนี้แทน
     savePlan({style: d.plan.style, roomType: d.plan.roomType, budget: d.plan.budget, width: d.plan.width, remixOf: undefined})
     writePlacement({pos: {}, photos: {}, locked: d.locked})
-    router.push('/result')
+    if (d.furniture) saveSelection({context: selectionContext(d.plan), items: d.furniture})
+    if (d.renderJob && d.furniture) {
+      saveDesignSession({job: d.renderJob, items: d.furniture, plan: d.plan, before: '', photoCount: d.photoCount ?? 0})
+      router.push(`/result?job=${encodeURIComponent(d.renderJob.id)}`)
+    } else router.push('/products')
   }
   function remove(id: string) {
     const next = drafts.filter(d => d.id !== id)
@@ -53,7 +60,10 @@ export default function Saved() {
 
       <section className="space-y-3">
         <h2 className="font-semibold">{t.drafts}</h2>
-        {drafts.length === 0 && <p className="text-sm text-zinc-500">{t.noDrafts}</p>}
+        {drafts.length === 0 && <div className="space-y-4 rounded-2xl border border-dashed border-[#d4c7b9] bg-white p-6 text-center">
+          <p className="text-sm text-zinc-600">{t.noDrafts}</p>
+          <StartButton />
+        </div>}
         <ul className="space-y-3">
           {drafts.map(d => (
             <li key={d.id} className="space-y-2 rounded-2xl border border-zinc-200 p-4">

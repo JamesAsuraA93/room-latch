@@ -41,6 +41,7 @@ export async function realListings(): Promise<RealProduct[]> {
        select l.id, row_number() over (partition by s.style_id, l.category order by (l.source = 'search'), l.rating desc nulls last, l.title) as k
          from shopee_listings l join shopee_listing_styles s on s.listing_id = l.id)
      select l.id, l.title, l.category, l.url, l.verification, l.dimensions_cm as dimensions, l.notes,
+            l.price_thb::float8 as price, l.image_url as image,
             (select array_agg(style_id order by style_id) from shopee_listing_styles where listing_id = l.id) as styles
        from shopee_listings l
       where l.id in (select id from ranked where k <= 20)

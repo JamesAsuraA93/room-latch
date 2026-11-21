@@ -23,6 +23,8 @@ export type RealProduct = {
   verification: Verification
   dimensions: string | null // only what the snapshot states; never inferred
   notes: string
+  price?: number | null // last observed listing price; not a live quote
+  image?: string | null
 }
 
 // Editorial mapping from the snapshot's style tags to the app's 8 styles (owner-approved "alias + borrow").

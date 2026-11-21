@@ -129,20 +129,20 @@ export function ResultView({products, live = null, real = []}: {products: Produc
     <div className="space-y-6">
       <RemixBanner />
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <PageHeader title="ห้องของคุณ ในแบบที่ชอบ"><span>{roomName(plan.roomType)} · {styleName(plan.style)}</span></PageHeader>
+        <PageHeader title="จัดห้องของคุณ"><span>{roomName(plan.roomType)} · {styleName(plan.style)}</span></PageHeader>
         <Button asChild variant="outline"><Link href="/style"><SlidersHorizontal className="size-4" />เปลี่ยนสไตล์</Link></Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
           {icon: Wallet, label: 'งบที่ตั้งไว้', value: baht(plan.budget)},
           {icon: Package, label: 'ชุดแนะนำ', value: `${result.items.length} ชิ้น`},
-          {icon: Ruler, label: 'ความกว้างมุม', value: `${plan.width} ซม.`},
+          {icon: Ruler, label: 'ความกว้าง', value: `${plan.width} ซม.`},
         ].map(({icon: Icon, label, value}) => (
-          <div key={label} className="flex flex-col gap-2 rounded-[22px] bg-white p-4 md:flex-row md:items-center md:gap-4">
-            <span className="flex size-10 items-center justify-center rounded-2xl bg-brand-soft text-brand"><Icon className="size-5" /></span>
+          <div key={label} className="flex flex-col gap-2 rounded-2xl bg-white p-3 md:flex-row md:items-center md:gap-3">
+            <span className="hidden size-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand md:flex"><Icon className="size-5" /></span>
             <div>
-              <p className="text-[11px] text-zinc-500">{label}</p>
+              <p className="text-xs text-zinc-500">{label}</p>
               <p className="mt-1 text-base font-semibold md:text-xl">{value}</p>
             </div>
           </div>
@@ -154,14 +154,13 @@ export function ResultView({products, live = null, real = []}: {products: Produc
         meta={{styleId: plan.style, roomType: plan.roomType, budget: plan.budget, width: plan.width, items: result.items.map(p => ({id: p.id, ...(placement.pos[p.id] ?? {x: 0, y: 0, w: 0})}))}} />
       <ReferenceFeedback count={roomImages.length} />
 
-      <details className="rl-disclosure">
+      <details open className="rl-disclosure">
         <summary>ชุดสินค้าแนะนำและงบประมาณ</summary>
         <aside className="space-y-5">
           <Card className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="rl-section-label">CURATED FOR YOUR ROOM</p>
-                <h2 className="mt-2 text-lg font-semibold">ชุดของที่แนะนำ</h2>
+                <h2 className="text-lg font-semibold">ชุดของที่แนะนำ</h2>
               </div>
               <span className="flex size-10 items-center justify-center rounded-2xl bg-[#ffdbb0] text-brand"><Armchair className="size-5" /></span>
             </div>
@@ -194,7 +193,7 @@ export function ResultView({products, live = null, real = []}: {products: Produc
                   ) : (
                     <span className="flex size-16 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl bg-paper text-[#a58a70]">
                       {p.slot === 'desk' ? <Package className="size-6" /> : /โคม|ไฟ/.test(p.name) ? <Lamp className="size-6" /> : <Armchair className="size-6" />}
-                      <span className="text-[8px] text-zinc-500">ยังไม่มีภาพ</span>
+                      <span className="text-xs text-zinc-500">ยังไม่มีภาพ</span>
                     </span>
                   )}
                   <div className="min-w-0 flex-1">
