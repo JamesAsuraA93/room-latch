@@ -1,0 +1,175 @@
+// RoomLatch DB — paste into https://dbdiagram.io/d
+// Mirrors db/schema.sql. Source of truth is schema.sql; update both together.
+
+Project RoomLatch {
+  database_type: 'PostgreSQL'
+  Note: 'Static catalog (no live price/stock) + users, designs (draft or Feed post), likes, saves. Images live in Object storage; DB keeps paths only.'
+}
+
+// ---------- Lookups ----------
+
+Table styles {
+  id text [pk, note: 'japandi, loft, ...']
+  name_th text [not null]
+  sort_order smallint [not null, unique]
+}
+
+Table room_types {
+  id text [pk, note: 'condo, bedroom, living, empty, cluttered']
+  name_th text [not null]
+  sort_order smallint [not null, unique]
+}
+
+// ---------- Catalog ----------
+
+Table catalog_items {
+  id text [pk]
+  room_type text [not null, ref: > room_types.id]
+  slot text [not null, note: 'desk, chair, lighting, rug, ...']
+  name text [not null]
+  keyword text [not null, default: '']
+  price_min_thb integer [not null, note: 'team estimate']
+  price_max_thb integer [not null, note: '>= price_min_thb; budget uses this']
+  priority smallint [not null, default: 1]
+  listing_url text [null, note: 'exact shopee.co.th/product/<shop>/<item> only']
+  width_cm integer [null, note: 'demo size; null = textile/small']
+  uses_floor boolean [not null, default: false]
+  is_fixture boolean [not null, default: false]
+  indexes { (room_type, slot) }
+  Note: 'Budget/width engine items: products.csv ranges + labelled fixtures. Not live Shopee data.'
+}
+
+Table catalog_item_styles {
+  item_id text [not null, ref: > catalog_items.id]
+  style_id text [not null, ref: > styles.id]
+  indexes { (item_id, style_id) [pk] }
+}
+
+Table shopee_listings {
+  id text [pk, note: 'shopee-<shop>-<item>']
+  shop_id bigint [not null]
+  item_id bigint [not null]
+  url text [note: 'GENERATED from shop_id + item_id']
+  title text [not null]
+  category text [not null, note: 'seating | table | light | textile | accent']
+  verification text [not null, note: 'photo | listing | gallery_failed']
+  evidence_status text [not null]
+  dimensions_cm text [null, note: 'as stated; variant unconfirmed']
+  notes text [not null, default: '']
+  source text [not null, note: 'snapshot | addition | exact_match']
+  shown_in_rooms "text[]" [not null, default: '{}']
+  checked_on date [not null]
+  indexes {
+    (shop_id, item_id) [unique]
+    category
+  }
+  Note: 'Real listings the team opened. No price, stock or image columns on purpose.'
+}
+
+Table shopee_listing_styles {
+  listing_id text [not null, ref: > shopee_listings.id]
+  style_id text [not null, ref: > styles.id]
+  indexes { (listing_id, style_id) [pk] }
+}
+
+// ---------- Users & social ----------
+
+Table better_auth_user {
+  id text [pk]
+  email text
+  Note: 'Created and owned by Better Auth (with session, account, verification). Shown for context only.'
+}
+
+Table profiles {
+  user_id text [pk, note: '= Better Auth user.id']
+  handle text [not null, unique, note: '^[a-z0-9_]{3,30}$']
+  display_name text [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Ref: profiles.user_id - better_auth_user.id
+
+Table designs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  owner_id text [not null, ref: > profiles.user_id]
+  room_type text [not null, ref: > room_types.id]
+  style_id text [not null, ref: > styles.id]
+  budget_thb integer [not null]
+  width_cm integer [not null]
+  total_max_thb integer [null, note: 'estimate at save time']
+  title text [null]
+  remix_of uuid [null, ref: > designs.id, note: 'on delete set null']
+  before_path text [null, note: 'designs/<id>/before.jpg|webp']
+  after_path text [null, note: 'designs/<id>/after.jpg|webp|png']
+  after_kind text [null, note: 'ai_render | composite (always labelled simulation)']
+  image_w integer [null]
+  image_h integer [null]
+  consent_at timestamptz [null, note: 'owner agreed to publish Before + After']
+  published_at timestamptz [null, note: 'null = draft (Saved); set = Feed post']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  indexes {
+    published_at [note: 'feed, where published_at is not null']
+    (owner_id, updated_at)
+    remix_of
+  }
+  Note: 'Publishing requires both image paths, image size and consent_at <= published_at (CHECK).'
+}
+
+Table design_items {
+  design_id uuid [not null, ref: > designs.id]
+  position smallint [not null]
+  catalog_item_id text [null, ref: > catalog_items.id]
+  listing_id text [null, ref: > shopee_listings.id]
+  x_pct real [null, note: '0-100 of room frame']
+  y_pct real [null]
+  w_pct real [null]
+  locked boolean [not null, default: false]
+  indexes {
+    (design_id, position) [pk]
+    listing_id
+  }
+  Note: 'Exactly one of catalog_item_id / listing_id (CHECK).'
+}
+
+Table design_likes {
+  design_id uuid [not null, ref: > designs.id]
+  user_id text [not null, ref: > profiles.user_id]
+  created_at timestamptz [not null, default: `now()`]
+  indexes {
+    (design_id, user_id) [pk]
+    user_id
+  }
+}
+
+Table design_saves {
+  design_id uuid [not null, ref: > designs.id]
+  user_id text [not null, ref: > profiles.user_id]
+  created_at timestamptz [not null, default: `now()`]
+  indexes {
+    (design_id, user_id) [pk]
+    (user_id, created_at)
+  }
+  Note: 'Saved tab bookmarks of published designs.'
+}
+
+TableGroup lookups {
+  styles
+  room_types
+}
+
+TableGroup catalog {
+  catalog_items
+  catalog_item_styles
+  shopee_listings
+  shopee_listing_styles
+}
+
+TableGroup social {
+  better_auth_user
+  profiles
+  designs
+  design_items
+  design_likes
+  design_saves
+}

@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs'
 import {parseCsv} from '../lib/plan.ts'
 import {REAL_CATEGORIES, STYLE_ALIAS, mergeReal, toRealProducts} from '../lib/real-catalog.ts'
 
-const rows = parseCsv(readFileSync(new URL('../../catalog/shopee-real-snapshot.csv', import.meta.url), 'utf8'))
+const rows = parseCsv(readFileSync(new URL('../catalog/shopee-real-snapshot.csv', import.meta.url), 'utf8'))
 assert.equal(rows.length, 26)
 const real = toRealProducts(rows)
 
@@ -38,7 +38,7 @@ assert.deepEqual(byId('shopee-752155244-24157985406').styles.sort(), ['japandi',
 assert.deepEqual(STYLE_ALIAS['warm-modern'], [])
 
 // additions: direct app-style tags, no aliasing
-const addRows = parseCsv(readFileSync(new URL('../../catalog/shopee-real-additions.csv', import.meta.url), 'utf8'))
+const addRows = parseCsv(readFileSync(new URL('../catalog/shopee-real-additions.csv', import.meta.url), 'utf8'))
 assert.equal(addRows.length, 24)
 const add = toRealProducts(addRows, 'direct')
 assert.equal(add.length, 24)

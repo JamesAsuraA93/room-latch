@@ -1,6 +1,6 @@
 // Server only. Neon Postgres via node-postgres on the pooled DATABASE_URL (pulled by `neon deploy`).
 // attachDatabasePool lets Vercel Fluid compute close idle clients before the instance suspends.
-// Schema/seed live in ../db/*.sql and are applied with DATABASE_URL_UNPOOLED, not from the app.
+// Schema/seed live in db/*.sql and are applied with DATABASE_URL_UNPOOLED, not from the app.
 import {Pool} from 'pg'
 import {attachDatabasePool} from '@vercel/functions'
 

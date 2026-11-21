@@ -6,6 +6,11 @@ const config: NextConfig = {
     remotePatterns: [{protocol: 'https', hostname: 'images.unsplash.com'}],
     formats: ['image/avif', 'image/webp'],
   },
+  // Data read with fs + process.cwd() is not traced automatically; ship it with the routes that read it.
+  outputFileTracingIncludes: {
+    '/result': ['./catalog/*.csv'],
+    '/api/render/live': ['./catalog/*.csv', './prompts/registry.json'],
+  },
 }
 
 export default config

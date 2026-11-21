@@ -5,7 +5,7 @@ import {parseCsv, toProducts, pickSet, fits, minimalSwap, noFitHint, type Produc
 import {FIXTURES, isFixture} from '../lib/fixtures.ts'
 import {EXACT_LISTINGS, exactFor} from '../lib/listings.ts'
 
-const catalog = toProducts(parseCsv(readFileSync(new URL('../../catalog/products.csv', import.meta.url), 'utf8')))
+const catalog = toProducts(parseCsv(readFileSync(new URL('../catalog/products.csv', import.meta.url), 'utf8')))
 assert.equal(catalog.length, 50)
 const all = [...catalog, ...FIXTURES]
 

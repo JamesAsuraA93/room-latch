@@ -13,7 +13,7 @@ const headers = {'Cache-Control': 'no-store'}
 const err = (status: number, code: string) => Response.json({error: {code}}, {status, headers})
 
 function styleEntry(key: string): StyleEntry | null {
-  const reg = JSON.parse(readFileSync(path.join(process.cwd(), '..', 'docs', 'prompts', 'registry.json'), 'utf8')) as {styles: StyleEntry[]}
+  const reg = JSON.parse(readFileSync(path.join(process.cwd(), 'prompts', 'registry.json'), 'utf8')) as {styles: StyleEntry[]}
   return reg.styles.find(s => s.key === key) ?? null
 }
 

@@ -1,0 +1,51 @@
+room_type,slot,item_th,keyword_th,keyword_en,styles,price_min,price_max,priority,deeplink,note,check_status,check_note
+bedroom,lighting,โคมไฟตั้งพื้นขาไม้,โคมไฟตั้งพื้น,wooden floor lamp,japandi|scandi|minimal|muji|nordic,590,1500,1,,,broad,"""ขาไม้""/""ไม้"" ถูกตัดทิ้ง ค้นแล้วได้โคมอะคริลิก คำว่า ไม้ ทำให้เหลือ 15 ผล ใช้คำกว้างแล้วกรองสไตล์ในแอป"
+bedroom,lighting,โคมไฟหัวเตียง,โคมไฟตั้งโต๊ะ ข้างเตียง,bedside table lamp,minimal|japandi|luxe|muji,250,900,1,,,fixed,คำเดิมได้โคมไฟสนามแบดปน คำใหม่ตรงทุกผล
+bedroom,bedding,ผ้าปูที่นอนสีพื้น,ผ้าปูที่นอน สีพื้น ไมโครเทค,plain bedsheet set,minimal|scandi|nordic,350,1200,1,,เปลี่ยนโทนห้องได้เร็วสุดต่อบาท,ok,ได้ชุดเครื่องนอนตรงหมด
+bedroom,bedding,ผ้านวมสีเอิร์ธโทน,ชุดผ้านวม สีเบจ,earth tone comforter,japandi|boho|muji,450,1800,2,,,fixed,"""ผ้านวม"" เดี่ยวๆ ดึงผ้าห่มเย็นตลอด เติม ""ชุด"" นำหน้าได้ชุดผ้านวม/เครื่องนอนล้วน"
+bedroom,curtain,ผ้าม่านทึบแสงสีครีม,ผ้าม่านทึบแสง สีครีม,blackout curtain cream,minimal|scandi|luxe|nordic,300,1500,1,,ต้องถามขนาดรางก่อนแนะนำ,ok,ตรง มีสีครีม/เบจจริง
+bedroom,rug,พรมข้างเตียงขนสั้น,พรมข้างเตียง ขนสั้น,bedside short pile rug,scandi|boho|nordic,200,900,2,,,broad,"""ขนสั้น"" ถูกตัด ได้พรมทั่วไป ผลเดียวกับคำพรมอื่น"
+bedroom,nightstand,โต๊ะข้างเตียงไม้,โต๊ะข้างเตียง ไม้ 2 ชั้น,wooden nightstand,japandi|loft|muji,450,1600,2,,,ok,ได้โต๊ะข้างเตียงนอร์ดิกตรง
+bedroom,storage,ตู้ลิ้นชักไม้,ตู้ลิ้นชักไม้,wooden chest drawer,minimal|scandi|nordic,700,2500,3,,,fixed,คำเดิมได้ตู้เอกสารเหล็ก คำใหม่ได้ตู้ลิ้นชักไม้จริง
+bedroom,mirror,กระจกเต็มตัวขอบไม้,กระจกเต็มตัว ขอบไม้ ตั้งพื้น,full length mirror wood frame,japandi|luxe|muji,590,2200,2,,,ok,ตรง มีขอบไม้/ตั้งพื้น
+bedroom,wall_decor,ภาพแขวนผนังมินิมอล,ภาพแขวนผนัง มินิมอล กรอบไม้,minimal wall art frame,minimal|scandi|nordic,120,600,3,,,ok,ได้ภาพใส่กรอบตรง
+bedroom,plant,ต้นไม้ปลอมกระถางสาน,ต้นไม้ปลอม กระถาง,artificial plant woven pot,boho|japandi|muji,250,1200,3,,,fixed,"""กระถางสาน"" ถูกเมิน คำใหม่ได้ต้นไม้พร้อมกระถางจริง"
+living,sofa,โซฟา 2 ที่นั่งผ้า,โซฟา 2 ที่นั่ง ผ้า,2 seater fabric sofa,minimal|scandi|nordic,2500,9000,1,,ชิ้นแพงสุดในห้อง ใช้วัดว่าคนกดจริงไหม,ok,ได้โซฟาผ้า/โฟม ตรงหมวด
+living,sofa,โซฟาเบดปรับนอน,โซฟาเบด ปรับนอนได้,sofa bed,loft|minimal,3000,12000,2,,,ok,ตรงมาก แบรนด์ Soflex ครองหน้าแรก
+living,rug,พรมลายเรขาคณิต,พรมห้องนั่งเล่น ลายเรขาคณิต,geometric living room rug,scandi|boho|nordic,590,3000,1,,,broad,ลายเรขาคณิตถูกเมิน ได้พรมทั่วไป
+living,coffee_table,โต๊ะกลางไม้ทรงกลม,โต๊ะกลาง ไม้ ทรงกลม,round wooden coffee table,japandi|scandi|muji|nordic,790,3500,1,,,ok,ได้โต๊ะกลางกลม/storage ตรง
+living,tv_console,ตู้วางทีวีไม้เตี้ย,ตู้วางทีวี ไม้ เตี้ย,low wooden tv console,minimal|japandi|muji,900,4000,2,,,ok,ตรง
+living,lighting,โคมไฟตั้งพื้นทรงโค้ง,โคมไฟตั้งพื้น ทรงโค้ง,arc floor lamp,luxe|loft,690,2500,1,,,ok,32 ผล โคมโค้งตรงทุกชิ้น
+living,lighting,ไฟเส้น LED แสงอุ่น,ไฟเส้น LED แสงอุ่น ติดผนัง,warm led strip light,loft|luxe,150,600,2,,,ok,ตรง LED strip + โคมผนัง
+living,curtain,ผ้าม่านโปร่งลินิน,ผ้าม่านโปร่ง ลินิน,sheer linen curtain,japandi|scandi|muji|nordic,250,1200,2,,,ok,ตรงมาก ม่านโปร่งลินินญี่ปุ่น
+living,shelf,ชั้นวางติดผนังไม้,ชั้นวางติดผนัง ไม้,wooden wall shelf,minimal|loft,190,900,2,,,ok,ตรง ชั้นไม้ติดผนัง
+living,cushion,หมอนอิงผ้าลินิน,หมอนอิง ปลอกผ้าลินิน,linen cushion cover,japandi|boho|muji,89,400,3,,ของถูก ปิดการขายง่าย ใส่ทุกห้องได้,ok,ตรง ปลอกหมอนลินิน
+living,plant,ต้นไม้ปลอมต้นสูง,ต้นมะกอกปลอม,tall artificial tree,boho|scandi|nordic,450,2000,2,,,fixed,คำเดิมได้ต้นคริสต์มาสเต็มหน้า (ของตามฤดู) คำใหม่ได้ต้นสูงแต่งมุมห้องจริง
+living,wall_decor,นาฬิกาแขวนผนังมินิมอล,นาฬิกาแขวนผนัง มินิมอล,minimal wall clock,minimal|scandi|nordic,150,700,3,,,ok,ตรง
+condo,table,โต๊ะพับติดผนัง,โต๊ะพับ ติดผนัง ประหยัดพื้นที่,wall mounted folding table,minimal|loft,490,1800,1,,,ok,ตรง โต๊ะพับติดผนัง
+condo,seating,เก้าอี้บาร์สตูล,เก้าอี้บาร์ สตูล ขาเหล็ก,bar stool metal leg,loft|minimal,350,1500,2,,,ok,ตรง สตูลบาร์
+condo,storage,ม้านั่งเก็บของ,ม้านั่ง เก็บของ ฝาเปิด,storage bench,minimal|scandi|nordic,590,2200,1,,,ok,ตรง กล่อง/ม้านั่งเก็บของ
+condo,divider,ฉากกั้นห้องไม้ระแนง,ฉากกั้นห้อง ไม้ระแนง,wooden room divider,japandi|loft|muji,890,3500,2,,คอนโดสตูดิโอใช้แบ่งโซนนอน,ok,ตรงมาก ฉากกั้นไม้ไผ่สไตล์ญี่ปุ่น
+condo,shelf,ชั้นวางของ 5 ชั้นแคบ,ชั้นวางของ 5 ชั้น แคบ,narrow 5 tier shelf,minimal|loft,390,1500,1,,,ok,ตรง ชั้นแคบมีล้อ
+condo,lighting,โคมไฟเพดานไม้,โคมไฟเพดาน นอร์ดิก,wooden ceiling lamp,japandi|muji,450,2000,2,,,fixed,คำเดิมได้พัดลมเพดาน+โคมคริสตัลปน คำใหม่ตรงสไตล์
+condo,mirror,กระจกติดผนังทรงโค้ง,กระจกติดผนัง ทรงโค้ง,arched wall mirror,luxe|boho,390,1800,2,,กระจกทำให้ห้องเล็กดูกว้าง,dup,ผลซ้ำกับแถว 9 (กระจกเต็มตัว) Shopee ไม่แยกทรงโค้ง
+condo,organizer,ที่แขวนผนังไม่เจาะ,ตะขอติดผนัง ไม่เจาะ,adhesive wall hook,minimal,59,250,3,,คอนโดเจาะผนังไม่ได้,fixed,คำเดิมได้ที่วางรีโมท คำใหม่ได้ตะขอกาวจริง
+condo,rug,พรมผืนเล็กกันลื่น,พรมผืนเล็ก กันลื่น,small non slip rug,scandi|boho|nordic,150,700,3,,,ok,ตรง พรมกันลื่น
+condo,plant,ต้นไม้ตั้งโต๊ะกระถางเซรามิก,ต้นไม้ตั้งโต๊ะ กระถางเซรามิก,desktop plant ceramic pot,japandi|minimal|muji,99,450,3,https://shopee.co.th/product/1063950096/53615749955,,ok,ได้กระถางเซรามิก แต่เป็นดอกไม้ประดิษฐ์เป็นหลัก
+empty,rug,พรมผืนใหญ่ปูกลางห้อง,พรมผืนใหญ่ 200x300,large area rug,scandi|boho|nordic,990,4500,1,,ห้องโล่งเริ่มที่พรมก่อนเสมอ,broad,ขนาด 200x300 ถูกเมิน ได้พรมทั่วไป ต้องกรองขนาดจากตัวเลือกสินค้า
+empty,seating,บีนแบ็กผ้าแคนวาส,โซฟานั่งพื้น,canvas bean bag,boho|loft,590,2200,1,,,fixed,Shopee TH ไม่มีหมวดบีนแบ็ก ค้น บีนแบ็ก/เก้าอี้บีนแบค ได้โซฟานั่งพื้นทั้งคู่ เลยใช้คำที่ขายจริง
+empty,seating,เบาะรองนั่งญี่ปุ่น,เบาะรองนั่ง ญี่ปุ่น,japanese floor cushion,japandi|muji,190,900,2,,,ok,ตรง เบาะทาทามิ/โซฟานั่งพื้น
+empty,shelf,ชั้นวางโมดูลาร์ต่อได้,ชั้นวางของ ทรงคิวบ์,modular cube shelf,minimal|loft,490,2500,1,,,fixed,คำเดิมได้ชั้นโชว์ art toy อะคริลิก คำใหม่ได้ชั้นไม้อเนกประสงค์
+empty,lighting,โคมไฟตั้งพื้นขาสามขา,โคมไฟตั้งพื้น,tripod floor lamp,loft|scandi|nordic,690,2800,2,,,broad,ขาสามขาถูกเมิน ใช้คำกว้างเหมือนแถว 1
+empty,curtain,ผ้าม่านยาวจรดพื้น,ผ้าม่าน ยาวจรดพื้น 2.8 เมตร,floor length curtain,minimal|luxe,490,2500,2,,,broad,ความยาว 2.8 ม. ถูกเมิน ได้ม่านกันแสงทั่วไป ความยาวเลือกที่ตัวเลือกสินค้า
+empty,wall_decor,ภาพแขวนผนังขนาดใหญ่,ภาพแขวนผนัง ขนาดใหญ่,large wall art,boho|luxe,290,1500,2,,,ok,ตรง ภาพแขวนใหญ่
+empty,table,โต๊ะญี่ปุ่นเตี้ย,โต๊ะพับญี่ปุ่น,low japanese table,japandi|muji,390,1800,2,,,fixed,คำเดิมได้โต๊ะกลางปน คำใหม่ได้โต๊ะเตี้ยญี่ปุ่นเต็มหน้า
+empty,plant,เซ็ตต้นไม้ปลอมตกแต่ง,ต้นไม้ปลอม กระถาง,artificial plant set,boho,350,1500,3,,,fixed,คำเดิมได้ต้นคริสต์มาส ใช้คำเดียวกับแถว 11
+cluttered,organizer,กล่องเก็บของมีฝา,กล่องเก็บของ มีฝา ซ้อนได้,stackable storage box with lid,minimal|muji,120,600,1,,ของพื้นฐานที่สุดของห้องรก ซื้อซ้ำได้เรื่อยๆ,ok,"""ซ้อนได้"" ถูกเมิน แต่ได้กล่องพลาสติกมีฝาตรงหมวด"
+cluttered,storage,ตู้ลิ้นชักพลาสติก,ตู้ลิ้นชักพลาสติก 4 ชั้น,plastic drawer unit,minimal,390,1500,1,,เก็บของจุกจิกที่ไม่มีที่อยู่ประจำ,ok,ได้ตู้ลิ้นชัก 3/4/5 ชั้น มีล้อ ตรง
+cluttered,shelf,ชั้นวางของอเนกประสงค์,ชั้นวางของ อเนกประสงค์,multipurpose shelf,minimal|loft|scandi|nordic,290,1800,1,,ยกของจากพื้นขึ้นชั้น เปลี่ยนภาพห้องเร็วสุด,ok,ได้ชั้นเหล็กและชั้นไม้ ตรงหมวด
+cluttered,basket,ตะกร้าสานเก็บของ,ตะกร้าผ้า สาน,woven storage basket,boho|japandi|muji,150,800,2,,ซ่อนของรกแต่ยังดูดีในรูป,ok,ได้ตะกร้าสาน ไม้ไผ่ มีฝา ตรง
+cluttered,storage,กล่องเก็บของใต้เตียง,กล่องเก็บของ ใต้เตียง,under bed storage box,minimal|muji,190,900,2,,ใช้พื้นที่ที่มองไม่เห็น เหมาะห้องเล็ก,ok,ตรงมาก มีแบบมีล้อและฝาเปิด
+cluttered,wardrobe,ราวแขวนเสื้อตั้งพื้น,ราวแขวนเสื้อ ตั้งพื้น,free standing clothes rack,minimal|loft,390,1800,2,,เสื้อกองบนเก้าอี้คือต้นเหตุห้องรก,ok,มีราวตากผ้าปนบ้าง แต่ 2 ใน 3 ตรง
+cluttered,organizer,กล่องจัดระเบียบลิ้นชัก,กล่องจัดระเบียบ ลิ้นชัก,drawer organizer,minimal|muji,59,350,3,,ของถูก ปิดการขายง่าย,ok,ได้กล่องจัดระเบียบในลิ้นชัก ตรง
+cluttered,organizer,กล่องเก็บสายไฟ,กล่องเก็บสายไฟ ปลั๊กพ่วง,cable box power strip,minimal,150,700,3,,สายไฟพันกันคือจุดที่ภาพ before/after ต่างชัด,ok,ตรง ได้กล่องเก็บปลั๊กและที่จัดสาย

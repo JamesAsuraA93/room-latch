@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "test": "node scripts/plan.test.mts && node scripts/render.test.mts && node scripts/live-render.test.mts && node scripts/real-catalog.test.mts",
-    "db:seed": "node scripts/export-db-seed.mts > ../db/seed.sql"
+    "db:seed": "node scripts/export-db-seed.mts > db/seed.sql"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1175.0",
