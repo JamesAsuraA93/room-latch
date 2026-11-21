@@ -102,10 +102,9 @@ Flow: `POST /api/render/live` (multipart: รูปห้อง 1–4, รูป
 
 - สถานะ job อยู่ใน Postgres (`render_jobs`) และรูปผลลัพธ์อยู่ใน bucket ที่ `renders/<job id>.png` instance ไหนก็ตอบ poll ได้
 - รูปที่ผู้ใช้อัปโหลดไม่ถูกเก็บ ส่งให้ OpenAI แล้วทิ้ง ส่วน job และรูปผลลัพธ์ถูกลบหลัง 24 ชั่วโมง
-- จำกัดการใช้ต่อ 24 ชั่วโมง: `ROOMLATCH_RENDER_DAILY_LIMIT` ต่อผู้ใช้ (นับตาม IP, ค่าเริ่มต้น 5) และ `ROOMLATCH_RENDER_DAILY_CAP` ทั้งระบบ (ค่าเริ่มต้น 100 คือเพดานค่าใช้จ่าย) job ที่ล้มเหลวไม่ถูกนับ
-- ผู้ใช้หนึ่งคนสร้างได้ทีละ 1 job
+- ตอนนี้ไม่จำกัดจำนวนภาพต่อผู้ใช้หรือต่อวัน และไม่ล็อกทีละงาน (คนที่ใช้ IP เดียวกันเคยบล็อกกันเอง) เพดานค่าใช้จ่ายคือวงเงินของบัญชี OpenAI เท่านั้น
 
-ยังไม่มี auth: limit ต่อผู้ใช้นับจาก IP จึงเลี่ยงได้ด้วยการเปลี่ยน IP ตัวที่กันค่าใช้จ่ายจริงคือเพดานทั้งระบบ
+endpoint นี้เรียกได้โดยไม่ต้อง login: ตั้ง budget limit ในบัญชี OpenAI ไว้เสมอ
 
 `scripts/gather-shopee.mts` (หา listing จาก Shopee แล้วให้ Codex CLI ตัดสินใจ keep/หมวด/สไตล์) เป็นงาน local เท่านั้น:
 `node --env-file=.env.local scripts/gather-shopee.mts` (`--dry` ไม่เขียน DB, `--self-test` ไม่ใช้เน็ต)

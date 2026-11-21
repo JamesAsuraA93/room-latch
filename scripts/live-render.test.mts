@@ -1,7 +1,7 @@
 // node scripts/live-render.test.mts — no real photos, no network, no CLI calls
 import assert from 'node:assert/strict'
 import {buildPrompt, childEnv, clientKey, gateRequest, isLoopbackHost, liveProvider, pngSize, sniffImage} from '../lib/live-render-core.ts'
-import {renderLimits, renderPath} from '../lib/render-jobs.ts'
+import {renderPath} from '../lib/render-jobs.ts'
 import {MODEL_DEFAULTS, OPENAI_EDITS_URL, OpenaiRenderError, buildEditRequest, imageSettings, openaiEdit, openaiJson} from '../lib/openai-render.ts'
 import {codexFailureReason, elapsedLabel, isTerminalJob} from '../lib/render-outcome.ts'
 import {designError} from '../lib/design-errors.ts'
@@ -43,10 +43,6 @@ assert.notEqual(ip({'x-real-ip': '203.0.113.7'}), ip({'x-real-ip': '203.0.113.8'
 assert.equal(ip({}), ip({}), 'callers without an address share one bucket')
 assert.ok(!ip({'x-real-ip': '203.0.113.7'}).includes('203'))
 
-// daily limits: defaults unless the env holds a whole number (0 = nobody may render)
-assert.deepEqual(renderLimits({}), {perClient: 5, total: 100})
-assert.deepEqual(renderLimits({ROOMLATCH_RENDER_DAILY_LIMIT: '2', ROOMLATCH_RENDER_DAILY_CAP: '0'}), {perClient: 2, total: 0})
-assert.deepEqual(renderLimits({ROOMLATCH_RENDER_DAILY_LIMIT: '', ROOMLATCH_RENDER_DAILY_CAP: '-1'}), {perClient: 5, total: 100})
 assert.equal(renderPath('00000000-0000-4000-8000-000000000001'), 'renders/00000000-0000-4000-8000-000000000001.png')
 
 // image sniffing (synthetic headers only)

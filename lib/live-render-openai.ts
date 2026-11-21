@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto'
 import {waitUntil} from '@vercel/functions'
 import {OUTPUT_MAX_BYTES, pngSize, type Job, type JobImage, type StartResult} from '@/lib/live-render-core'
 import {OpenaiRenderError} from '@/lib/openai-render'
-import {HEARTBEAT_SECONDS, beatJob, purgeExpiredJobs, readJob, renderLimits, renderPath, reserveJob, settleJob, type Outcome} from '@/lib/render-jobs'
+import {HEARTBEAT_SECONDS, beatJob, purgeExpiredJobs, readJob, renderPath, reserveJob, settleJob, type Outcome} from '@/lib/render-jobs'
 import {PipelineError, renderPlaced, type PipelineInput} from '@/lib/render-pipeline'
 import {storage} from '@/lib/storage'
 
@@ -67,12 +67,10 @@ const logged = (what: string) => (e: unknown) => console.error(what, (e as Error
 
 export async function startOpenaiJob(input: PipelineInput, clientKey: string): Promise<StartResult> {
   const id = randomUUID()
-  let refused
-  try { refused = await reserveJob(id, clientKey, renderLimits(process.env)) } catch (e) {
+  try { await reserveJob(id, clientKey) } catch (e) {
     logged('render job store unavailable')(e)
     return {ok: false, status: 503, code: 'job_store_unavailable'}
   }
-  if (refused) return {ok: false, status: refused === 'job_in_progress' ? 409 : 429, code: refused}
   // waitUntil keeps a serverless instance alive until the job settles; locally the promise simply runs on.
   waitUntil(run(id, input).catch(logged('render job did not settle')))
   waitUntil(purge().catch(logged('render job purge failed')))

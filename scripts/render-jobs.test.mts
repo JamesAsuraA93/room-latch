@@ -22,14 +22,12 @@ try {
   await sql.query(migration)
   await sql.query('delete from render_jobs; delete from recommend_calls') // clean slate for the counts below (rolled back)
 
-  const limits = {perClient: 2, total: 3}
   const output = (id: string) => ({path: renderPath(id), width: 1536, height: 1024, bytes: 2_000_000})
-  const [a1, a2, a3, a4, b1, c1] = Array.from({length: 6}, () => randomUUID())
+  const [a1, a2, a3, b1, d1] = Array.from({length: 5}, () => randomUUID())
 
-  // one running job per caller
-  assert.equal(await reserveJob(a1, 'a', limits, sql), null)
-  assert.equal(await reserveJob(a2, 'a', limits, sql), 'job_in_progress')
-  assert.deepEqual({...(await readJob(a1, sql)), startedAt: 0}, {id: a1, status: 'running', startedAt: 0, finishedAt: undefined, error: undefined, output: undefined})
+  // no lock and no daily limit: one caller may run jobs side by side
+  for (const id of [a1, a2, a3]) await reserveJob(id, 'a', sql)
+  for (const id of [a1, a2, a3]) assert.deepEqual({...(await readJob(id, sql)), startedAt: 0}, {id, status: 'running', startedAt: 0, finishedAt: undefined, error: undefined, output: undefined})
 
   // the first outcome stands
   assert.equal(await settleJob(a1, {status: 'succeeded', output: output(a1)}, sql), true)
@@ -37,34 +35,21 @@ try {
   const done = await readJob(a1, sql)
   assert.equal(done?.status, 'succeeded'); assert.deepEqual(done?.output, output(a1)); assert.ok(done!.finishedAt! >= done!.startedAt)
 
-  // failed jobs cost nothing and are not counted; succeeded and cancelled ones are
-  assert.equal(await reserveJob(a2, 'a', limits, sql), null)
   assert.equal(await settleJob(a2, {status: 'failed', error: 'openai_quota'}, sql), true)
   assert.equal((await readJob(a2, sql))?.error, 'openai_quota')
-  assert.equal(await reserveJob(a3, 'a', limits, sql), null)
   assert.equal(await settleJob(a3, {status: 'cancelled', error: 'cancelled'}, sql), true)
-  assert.equal(await reserveJob(a4, 'a', limits, sql), 'rate_limited')
 
-  // deployment-wide ceiling
-  assert.equal(await reserveJob(b1, 'b', limits, sql), null)
-  assert.equal(await reserveJob(c1, 'c', limits, sql), 'daily_cap_reached')
-
-  // a running row whose instance died reads as a timeout and no longer blocks its caller
+  // a running row whose instance died reads as a timeout
+  await reserveJob(b1, 'b', sql)
   await sql.query(`update render_jobs set started_at = now() - interval '10 minutes' where id = $1`, [b1])
   assert.deepEqual({...(await readJob(b1, sql)), startedAt: 0}, {id: b1, status: 'failed', startedAt: 0, error: 'timeout'})
-  assert.equal(await reserveJob(c1, 'b', {perClient: 9, total: 9}, sql), null)
 
-  // a server that dies mid-job stops beating: after LOST_AFTER_SECONDS its caller may start again, long before the 6 minute cap
-  const [d1, d2] = [randomUUID(), randomUUID()]
-  assert.equal(await reserveJob(d1, 'd', {perClient: 9, total: 99}, sql), null)
-  assert.equal(await reserveJob(d2, 'd', {perClient: 9, total: 99}, sql), 'job_in_progress')
+  // a server that dies mid-job stops beating: after LOST_AFTER_SECONDS the job reads as failed, long before the 6 minute cap
+  await reserveJob(d1, 'd', sql)
   await sql.query(`update render_jobs set heartbeat_at = now() - interval '1 minute' where id = $1`, [d1])
   assert.equal((await readJob(d1, sql))?.status, 'failed')
   await beatJob(d1, sql) // a live instance beating again revives it
   assert.equal((await readJob(d1, sql))?.status, 'running')
-  assert.equal(await reserveJob(d2, 'd', {perClient: 9, total: 99}, sql), 'job_in_progress')
-  await sql.query(`update render_jobs set heartbeat_at = now() - interval '1 minute' where id = $1`, [d1])
-  assert.equal(await reserveJob(d2, 'd', {perClient: 9, total: 99}, sql), null)
 
   // ids come from the URL: junk never reaches a uuid column
   assert.equal(await readJob('nope', sql), null)

@@ -42,12 +42,12 @@ own the photos. Rerun to copy new listings: `node --env-file=.env.local scripts/
 
 ## AI render jobs
 
-`render_jobs` holds the status of renders run by the OpenAI provider (production) and backs the daily
-limits; the output image is at `renders/<job id>.png` in Object storage. Rows and images are purged 24 hours
+`render_jobs` holds the status of renders run by the OpenAI provider (production); renders have no daily
+limit. The output image is at `renders/<job id>.png` in Object storage. Rows and images are purged 24 hours
 after a job starts. `client_key` is a hash of the caller's IP, never the address. Existing databases need
 `db/migrations/002-render-jobs.sql`. `npm run test:db` exercises the store in a rolled-back transaction.
 
-`recommend_calls` counts decision-model calls by `POST /api/recommend` for its daily limits (same hashed
+`recommend_calls` counts decision-model calls by `POST /api/recommend` for its daily limits (hashed
 `client_key`, purged after 24 hours). Over a limit the route answers with the free rules pick instead.
 Existing databases need `db/migrations/005-recommend-calls.sql`.
 

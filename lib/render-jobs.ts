@@ -1,6 +1,6 @@
 // Postgres store for render jobs run by the OpenAI provider (table render_jobs, db/schema.sql).
 // On a serverless host every request may land on a different instance, so job status cannot live in memory.
-// The same rows back the daily limits. Database only: the caller owns the image in Object storage.
+// Database only: the caller owns the image in Object storage.
 // Relative imports with extensions so `node scripts/render-jobs.test.mts` can load this file directly.
 import type {Pool} from 'pg'
 import {db} from './db.ts'
@@ -12,7 +12,7 @@ type Env = Record<string, string | undefined>
 export const STALE_AFTER_SECONDS = 6 * 60
 /** The instance running a job refreshes heartbeat_at this often (live-render-openai.ts). */
 export const HEARTBEAT_SECONDS = 10
-/** A running row that has not beaten for this long lost its server (crash, restart, deploy): it stops blocking. */
+/** A running row that has not beaten for this long lost its server (crash, restart, deploy): it reads as failed. */
 export const LOST_AFTER_SECONDS = 45
 // Either rule marks a running row dead: no recent heartbeat, or older than any job can run.
 const DEAD = `(heartbeat_at < now() - make_interval(secs => ${LOST_AFTER_SECONDS}) or started_at < now() - make_interval(secs => ${STALE_AFTER_SECONDS}))`
@@ -23,31 +23,13 @@ export const renderPath = (id: string) => `renders/${id}.png`
 
 export type Limits = {perClient: number; total: number}
 const count = (value: string | undefined, fallback: number) => value && /^\d+$/.test(value) ? Number(value) : fallback
-/** Renders allowed per 24 hours: per caller, and for the whole deployment (the spending ceiling). */
-export function renderLimits(env: Env): Limits {
-  return {perClient: count(env.ROOMLATCH_RENDER_DAILY_LIMIT, 5), total: count(env.ROOMLATCH_RENDER_DAILY_CAP, 100)}
-}
-
-export type Refused = 'job_in_progress' | 'rate_limited' | 'daily_cap_reached'
-
 /**
- * Record a new running job unless the caller is over a limit. Failed jobs are not counted: they cost nothing.
- * shortcut: check then insert, not atomic, so parallel requests can overshoot a limit by a few; take an advisory lock
- * per client_key if the limits ever need to be exact.
+ * Record a new running job.
+ * shortcut: no per-caller lock or daily limit (callers behind one IP blocked each other), so the OpenAI account's
+ * own budget is the only spending ceiling; bring back a count over client_key here before opening this to the public.
  */
-export async function reserveJob(id: string, clientKey: string, limits: Limits, sql: Sql = db()): Promise<Refused | null> {
-  const {rows: [used]} = await sql.query<{mine: number; total: number; running: number}>(
-    `select count(*) filter (where client_key = $1)::int as mine,
-            count(*)::int as total,
-            count(*) filter (where client_key = $1 and status = 'running' and not ${DEAD})::int as running
-       from render_jobs
-      where status <> 'failed' and started_at > now() - ${RETENTION}`,
-    [clientKey])
-  if (used.running) return 'job_in_progress'
-  if (used.mine >= limits.perClient) return 'rate_limited'
-  if (used.total >= limits.total) return 'daily_cap_reached'
+export async function reserveJob(id: string, clientKey: string, sql: Sql = db()): Promise<void> {
   await sql.query(`insert into render_jobs (id, client_key) values ($1, $2)`, [id, clientKey])
-  return null
 }
 
 /** Recommend calls allowed per 24 hours (each is up to 2 decision-model calls, ~$0.01). */

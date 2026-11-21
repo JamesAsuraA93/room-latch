@@ -8,7 +8,7 @@ export const MAX_ROOM_REFERENCES = 3
 
 export type StartArgs = {
   provider: Provider
-  clientKey: string // rate-limit bucket of the caller (see clientKey in lib/live-render-core.ts)
+  clientKey: string // hash of the caller's IP, stored with the job (see clientKey in lib/live-render-core.ts)
   room: RenderImage // the photo that gets edited
   roomReferences?: RenderImage[] // other angles of the same room
   floorPlan?: RenderImage
