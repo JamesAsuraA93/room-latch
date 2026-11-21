@@ -56,6 +56,8 @@ npm run build
 
 ตั้ง `OPENAI_API_KEY` บนเซิร์ฟเวอร์เพื่อเปิดสร้างภาพ ทั้ง local และ production ใช้ OpenAI Images API โดยตรง ไม่เรียก Codex CLI และไม่ใช้ค่า `ROOMLATCH_RENDER_PROVIDER` แบบเก่า ตัวเลือกโมเดลอยู่ใน `OPENAI_IMAGE_MODEL` และ `OPENAI_IMAGE_QUALITY`
 
+บน Vercel Production (`VERCEL_ENV=production`) ค่าเริ่มต้นของภาพห้องเป็น `gpt-image-2.6-sunburst` / `max`; local และ preview ใช้ `gpt-image-2.5-sunburst` / `low` ถ้ามี Production env กำหนดโมเดลหรือคุณภาพไว้แล้ว ให้เปลี่ยนเป็น `OPENAI_IMAGE_MODEL=gpt-image-2.6-sunburst` และ `OPENAI_IMAGE_QUALITY=max` แล้ว deploy โค้ดเวอร์ชันนี้ การตั้ง env มีลำดับเหนือค่าเริ่มต้นเสมอ ระดับ `max` เพิ่มเวลาและค่าใช้จ่าย ทั้งขั้นเตรียมห้องและภาพสุดท้าย ยังอยู่ภายใต้เวลาสูงสุด 300 วินาทีของ route จึงต้องตรวจเวลาใช้งานจริงหลัง deploy
+
 Flow: `POST /api/render/live` (multipart: รูปห้อง 1–4, รูปสินค้า ≤6, รูปสไตล์ ≤1, ต้องมี `consent=yes`) → poll `GET /api/render/live/[id]` → `GET /api/render/live/[id]/image`
 
 ### เตรียมห้องและแชร์ภาพก่อน–หลัง

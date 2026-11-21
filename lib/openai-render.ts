@@ -23,11 +23,22 @@ export const MODEL_DEFAULTS = {
   decision: {model: 'gpt-6.1-terra'},
 } as const
 
+// Vercel production prioritizes final image detail; local and preview retain cheaper defaults.
+export const PRODUCTION_RENDER_DEFAULTS = {model: 'gpt-image-2.6-sunburst', quality: 'max'} as const
+
+function supportsExtendedQuality(model: string) {
+  return /^gpt-image-2\.[56]-(sunburst|flare)(?:-\d{4}-\d{2}-\d{2})?$/.test(model)
+}
+
 /** Public configuration only; never return the API key in diagnostics. */
 export function imageSettings(env: Record<string, string | undefined>, purpose: 'render' | 'cutout' = 'render') {
+  const defaults = purpose === 'render' && env.VERCEL_ENV === 'production' ? PRODUCTION_RENDER_DEFAULTS : MODEL_DEFAULTS[purpose]
+  const model = (purpose === 'cutout' ? env.OPENAI_CUTOUT_MODEL : env.OPENAI_IMAGE_MODEL) || defaults.model
+  const configuredQuality = purpose === 'cutout' ? env.OPENAI_CUTOUT_QUALITY : env.OPENAI_IMAGE_QUALITY
   return {
-    model: (purpose === 'cutout' ? env.OPENAI_CUTOUT_MODEL : env.OPENAI_IMAGE_MODEL) || MODEL_DEFAULTS[purpose].model,
-    quality: (purpose === 'cutout' ? env.OPENAI_CUTOUT_QUALITY : env.OPENAI_IMAGE_QUALITY) || MODEL_DEFAULTS[purpose].quality,
+    model,
+    // An older explicitly selected model cannot inherit production's max quality.
+    quality: configuredQuality || (defaults.quality === 'max' && !supportsExtendedQuality(model) ? 'high' : defaults.quality),
   }
 }
 
@@ -63,7 +74,8 @@ export function buildEditRequest({image, mime, prompt, references = [], env = pr
   form.append('n', '1')
   form.append('size', 'auto')
   form.append('output_format', 'png')
-  if (!['low', 'medium', 'high', 'auto'].includes(quality)) throw new OpenaiRenderError('invalid_quality')
+  const allowedQualities = supportsExtendedQuality(model) ? ['low', 'medium', 'high', 'xhigh', 'max', 'auto'] : ['low', 'medium', 'high', 'auto']
+  if (!allowedQualities.includes(quality)) throw new OpenaiRenderError('invalid_quality')
   form.append('quality', quality)
   if (background) form.append('background', background)
   // Only gpt-image-1.5 takes input_fidelity (the API says to omit it for newer models); that model shuts down 2026-12-01.
