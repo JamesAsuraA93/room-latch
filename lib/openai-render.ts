@@ -10,7 +10,7 @@ const MAX_B64 = 40 * 1024 * 1024
 export type OpenaiEditArgs = {
   image: Buffer
   mime: string
-  references?: {image: Buffer; mime: string}[]
+  references?: {image: Buffer; mime: string; name?: string}[]
   prompt: string
   signal?: AbortSignal
   env?: Record<string, string | undefined>
@@ -34,8 +34,15 @@ export function buildEditRequest({image, mime, prompt, references = [], env = pr
   form.append('model', model)
   form.append('prompt', prompt)
   form.append('n', '1')
+  form.append('size', 'auto')
+  form.append('output_format', 'png')
+  const quality = env.OPENAI_IMAGE_QUALITY || 'medium'
+  if (!['low', 'medium', 'high', 'auto'].includes(quality)) throw new OpenaiRenderError('invalid_quality')
+  form.append('quality', quality)
+  if (model === 'gpt-image-1.5') form.append('input_fidelity', 'high')
+  if (references.length > 15) throw new OpenaiRenderError('too_many_images')
   form.append(references.length ? 'image[]' : 'image', new Blob([new Uint8Array(image)], {type: mime}), `room.${ext}`)
-  references.forEach((r, i) => form.append('image[]', new Blob([new Uint8Array(r.image)], {type: r.mime}), `reference-${i}.${r.mime.split('/')[1]}`))
+  references.forEach((r, i) => form.append('image[]', new Blob([new Uint8Array(r.image)], {type: r.mime}), r.name ?? `reference-${i}.${r.mime.split('/')[1]}`))
   return {url: OPENAI_EDITS_URL, init: {method: 'POST', headers: {Authorization: `Bearer ${key}`}, body: form}}
 }
 

@@ -18,7 +18,7 @@ export default function Profile() {
 
   function clearAll() {
     try { localStorage.removeItem(SOCIAL_KEY); localStorage.removeItem(DRAFTS_KEY) } catch {}
-    try { [PLAN_KEY, ROOM_IMAGE_KEY, 'room-ai-photos', PLACEMENT_KEY, 'room-ai-last-design'].forEach(k => sessionStorage.removeItem(k)) } catch {}
+    try { [PLAN_KEY, ROOM_IMAGE_KEY, 'room-ai-photos', 'room-ai-style-reference', 'room-ai-product-render', PLACEMENT_KEY, 'room-ai-last-design'].forEach(k => sessionStorage.removeItem(k)) } catch {}
     setStats(count()); setOpen(false); setDone(true)
   }
 

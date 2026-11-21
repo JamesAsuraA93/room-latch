@@ -6,7 +6,7 @@ import {lstat, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import {OUTPUT_MAX_BYTES, OUTPUT_NAME, buildPrompt, childEnv, sniffImage, type ImageKind, type PromptItem, type Provider, type StyleEntry} from '@/lib/live-render-core'
-import {openaiEdit} from '@/lib/openai-render'
+import {openaiEdit, OpenaiRenderError} from '@/lib/openai-render'
 
 // Fixed executable. Never taken from the request. Override only via server env on this Mac.
 const CODEX_BIN = process.env.ROOMLATCH_CODEX_BIN || '/opt/homebrew/bin/codex'
@@ -87,19 +87,23 @@ async function runOpenai(job: Internal, input: Buffer, kind: ImageKind, prompt: 
   const abort = new AbortController()
   job.abort = abort
   try {
-    const png = await openaiEdit({image: input, mime: kind.mime, prompt, references: references.map(r => ({image: r.image, mime: r.kind.mime})), signal: abort.signal})
+    const png = await openaiEdit({image: input, mime: kind.mime, prompt, references: references.map((r, i) => ({image: r.image, mime: r.kind.mime, name: path.basename(job.inputFiles![i + 1])})), signal: abort.signal})
     await writeFile(path.join(job.dir, OUTPUT_NAME), png, {mode: 0o600})
   } catch (e) {
-    if (job.status === 'running') { job.status = 'failed'; job.error = (e as Error).name === 'AbortError' ? 'cancelled' : 'openai_failed' ; job.finishedAt = Date.now() }
+    if (job.status === 'running') { job.status = 'failed'; job.error = (e as Error).name === 'AbortError' ? 'cancelled' : (e instanceof OpenaiRenderError ? (e.status === 401 ? 'openai_auth' : e.status === 403 ? 'openai_access' : e.status === 429 ? 'openai_quota' : e.code === 'bad_response' ? 'openai_bad_response' : 'openai_failed') : 'openai_failed') ; job.finishedAt = Date.now() }
   }
   await finish(job, path.join(job.dir, `input.${kind.ext}`))
 }
 
 export type StartResult = {ok: true; job: Job} | {ok: false; status: number; code: string}
 
-export async function startJob(provider: Provider, image: Buffer, kind: ImageKind, style: StyleEntry, items: PromptItem[], references: {image: Buffer; kind: ImageKind}[] = []): Promise<StartResult> {
+let startingJob = false
+export async function startJob(provider: Provider, image: Buffer, kind: ImageKind, style: StyleEntry, items: PromptItem[], references: {image: Buffer; kind: ImageKind}[] = [], styleReference?: {image: Buffer; kind: ImageKind}, productReferences: {id: string; image: Buffer; kind: ImageKind; widthCm?: number}[] = []): Promise<StartResult> {
+  if (productReferences.length > 6) return {ok: false, status: 400, code: 'too_many_products'}
   if (references.length > 3) return {ok: false, status: 400, code: 'image_count_1_to_4'}
-  if (running()) return {ok: false, status: 409, code: 'job_in_progress'}
+  if (startingJob || running()) return {ok: false, status: 409, code: 'job_in_progress'}
+  startingJob = true
+  try {
   // keep only the newest finished job on disk
   for (const [id, j] of jobs) { await rm(j.dir, {recursive: true, force: true}); jobs.delete(id) }
   const dir = await mkdtemp(path.join(os.tmpdir(), 'roomlatch-render-'))
@@ -111,13 +115,29 @@ export async function startJob(provider: Provider, image: Buffer, kind: ImageKin
     await writeFile(file, reference.image, {mode: 0o600})
     inputFiles.push(file)
   }
+  const roomReferenceFiles = inputFiles.slice(1).map(file => path.basename(file))
+  const productFiles = []
+  for (const [i, product] of productReferences.entries()) {
+    const file = `product-${i + 1}.${product.kind.ext}`
+    await writeFile(path.join(dir, file), product.image, {mode: 0o600})
+    inputFiles.push(path.join(dir, file))
+    productFiles.push({id: product.id, file, imageIndex: inputFiles.length, widthCm: product.widthCm})
+  }
+  let styleFile: string | undefined
+  if (styleReference) {
+    styleFile = `style-reference.${styleReference.kind.ext}`
+    const file = path.join(dir, styleFile)
+    await writeFile(file, styleReference.image, {mode: 0o600})
+    inputFiles.push(file)
+  }
   const job: Internal = {id: randomUUID(), provider, status: 'running', startedAt: Date.now(), dir, inputFiles}
   jobs.set(job.id, job)
   job.timer = setTimeout(() => cancelJob(job.id, 'timeout'), TIMEOUT_MS)
-  const prompt = buildPrompt(style, items, path.basename(inputFile), inputFiles.slice(1).map(file => path.basename(file)))
+  const prompt = buildPrompt(style, items, path.basename(inputFile), roomReferenceFiles, styleFile, productFiles, provider)
   if (provider === 'codex') runCodex(job, inputFile, prompt)
-  else void runOpenai(job, image, kind, prompt, references)
+  else void runOpenai(job, image, kind, prompt, [...references, ...productReferences, ...(styleReference ? [styleReference] : [])])
   return {ok: true, job: publicJob(job)}
+  } finally { startingJob = false }
 }
 
 export function cancelJob(id: string, reason = 'cancelled') {

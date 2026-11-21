@@ -8,7 +8,7 @@ const ROOM_OUTLINE = 'polygon(50% 12%, 51.3% 12.4%, 85.5% 26.7%, 86.1% 27.8%, 86
 
 export function Logo() {
   return (
-    <Link href="/" className="flex items-center gap-2.5 text-lg font-bold text-ink">
+    <Link href="/" className="flex items-center gap-2.5 text-lg font-semibold tracking-tight text-white">
       <span className="relative block size-8 shrink-0">
         <img src={BRAND.logo} alt="" width={32} height={32} className="absolute inset-0 size-8 scale-[1.2] object-contain" style={{clipPath: ROOM_OUTLINE}} />
       </span>
