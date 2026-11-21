@@ -65,3 +65,17 @@ const badFetch = (async () => new Response('{"data":[]}', {status: 200})) as typ
 await assert.rejects(openaiEdit({image: img, mime: 'image/png', prompt: 'p', env: fakeEnv, fetchImpl: badFetch}), (e: unknown) => (e as OpenaiRenderError).code === 'bad_response')
 assert.equal(calls, 1)
 console.log('live-render ok')
+
+// Multiple references preserve order and the main image's camera view.
+const multi = buildEditRequest({image: img, mime: 'image/png', prompt: 'multi', env: fakeEnv,
+  references: [{image: Buffer.from('ANGLE'), mime: 'image/jpeg'}, {image: Buffer.from('PLAN'), mime: 'image/png'}]})
+const multipart = multi.init.body as FormData
+const uploads = multipart.getAll('image[]') as File[]
+assert.equal(uploads.length, 3)
+assert.equal(multipart.has('image'), false)
+assert.equal(await uploads[1].text(), 'ANGLE')
+assert.equal(await uploads[2].text(), 'PLAN')
+const multiPrompt = buildPrompt({key: 'minimal', th: 'มินิมอล', prompt: 'simple'}, [], 'input.jpg', ['reference-1.jpg', 'reference-2.png'])
+assert.match(multiPrompt, /reference-1.jpg, reference-2.png/)
+assert.match(multiPrompt, /Edit only the FIRST photo/)
+console.log('multi-image render contract ok')

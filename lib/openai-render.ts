@@ -10,6 +10,7 @@ const MAX_B64 = 40 * 1024 * 1024
 export type OpenaiEditArgs = {
   image: Buffer
   mime: string
+  references?: {image: Buffer; mime: string}[]
   prompt: string
   signal?: AbortSignal
   env?: Record<string, string | undefined>
@@ -23,7 +24,7 @@ export class OpenaiRenderError extends Error {
 }
 
 /** Build the multipart request. Exported for contract tests. */
-export function buildEditRequest({image, mime, prompt, env = process.env}: OpenaiEditArgs): {url: string; init: RequestInit} {
+export function buildEditRequest({image, mime, prompt, references = [], env = process.env}: OpenaiEditArgs): {url: string; init: RequestInit} {
   const key = env.OPENAI_API_KEY
   const model = env.OPENAI_IMAGE_MODEL
   if (!key) throw new OpenaiRenderError('missing_api_key')
@@ -33,7 +34,8 @@ export function buildEditRequest({image, mime, prompt, env = process.env}: Opena
   form.append('model', model)
   form.append('prompt', prompt)
   form.append('n', '1')
-  form.append('image', new Blob([new Uint8Array(image)], {type: mime}), `room.${ext}`)
+  form.append(references.length ? 'image[]' : 'image', new Blob([new Uint8Array(image)], {type: mime}), `room.${ext}`)
+  references.forEach((r, i) => form.append('image[]', new Blob([new Uint8Array(r.image)], {type: r.mime}), `reference-${i}.${r.mime.split('/')[1]}`))
   return {url: OPENAI_EDITS_URL, init: {method: 'POST', headers: {Authorization: `Bearer ${key}`}, body: form}}
 }
 

@@ -1,5 +1,7 @@
 'use client'
 import {useEffect, useMemo, useState} from 'react'
+import {readRoomImages} from '@/lib/room-images'
+import {ReferenceFeedback} from '@/components/reference-feedback'
 import {PageHeader} from '@/components/page-header'
 import {LiveRenderPanel} from '@/components/live-render-panel'
 import type {Provider} from '@/lib/live-render-core'
@@ -29,6 +31,7 @@ export function ResultView({products, live = null, real = []}: {products: Produc
   const [realIds, setRealIds] = useState<string[]>([])
   const [plan, setPlan] = useState<Plan>(DEFAULT_PLAN)
   const [before, setBefore] = useState(BEFORE)
+  const [roomImages, setRoomImages] = useState<string[]>([])
   const [sample, setSample] = useState(true)
   const [placement, setPlacement] = useState<PlacementState>(EMPTY_PLACEMENT)
   const [editing, setEditing] = useState(false)
@@ -39,6 +42,7 @@ export function ResultView({products, live = null, real = []}: {products: Produc
   const [render, setRender] = useState<{ok: boolean; provider?: string} | null>(null)
 
   useEffect(() => {
+    setRoomImages(readRoomImages())
     const p = readPlan()
     setPlan(p); setBudget(String(p.budget)); setWidth(String(p.width))
     setPlacement(readPlacement())
@@ -101,6 +105,7 @@ export function ResultView({products, live = null, real = []}: {products: Produc
   /** ซ้อมเดโมใหม่: ห้องตัวอย่าง + ค่าเริ่มต้น ไม่แตะของที่เซฟ/ไลก์/draft */
   function resetDemo() {
     startDemoSession()
+    setRoomImages(readRoomImages())
     setPlan(readPlan()); setBudget(String(readPlan().budget)); setWidth(String(readPlan().width))
     setPlacement(readPlacement()); setBefore(BEFORE); setSample(true)
     setChanges(null); setTotals(null); setEditing(false); setRender(null); setNote('')
@@ -119,6 +124,7 @@ export function ResultView({products, live = null, real = []}: {products: Produc
         <PageHeader title={t.result}><span className="text-brand">{roomName(plan.roomType)} · {styleName(plan.style)} · {baht(plan.budget)} · {plan.width} {t.cm}</span></PageHeader>
       </div>
 
+      <ReferenceFeedback count={roomImages.length} />
       {!result.lockedOk && (
         <Card className="space-y-2 border-red-200 bg-red-50">
           <p className="text-sm text-red-800">{t.lockedFail}</p>
@@ -241,7 +247,7 @@ export function ResultView({products, live = null, real = []}: {products: Produc
       <RealProductsPicker all={real} style={plan.style} selected={realIds} onChange={setRealIds} />
 
       {live && result.items.length > 0 && (
-        <LiveRenderPanel provider={live} roomImage={before} meta={{styleId: plan.style, roomType: plan.roomType, budget: plan.budget, width: plan.width,
+        <LiveRenderPanel provider={live} roomImage={before} roomImages={roomImages} meta={{styleId: plan.style, roomType: plan.roomType, budget: plan.budget, width: plan.width,
           items: [...result.items.map(p => p.id), ...exacts.map(l => l.id), ...realIds.filter(id => real.some(p => p.id === id))]
             .slice(0, 12).map(id => ({id, ...(placement.pos[id] ?? {x: 0, y: 0, w: 0})}))}} />
       )}

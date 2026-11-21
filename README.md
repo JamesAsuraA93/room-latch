@@ -1,5 +1,18 @@
 # RoomLatch UI (demo)
 
+## Server storage configuration
+
+Copy `.env.example` to `.env.local` and fill in the server credentials. Next.js loads
+`.env.local` automatically; keep it out of Git. `DATABASE_URL` is reserved for the
+database integration (the app still stores its current user state in the browser).
+
+`lib/storage.ts` provides server-only `uploadObject(key, body, contentType)` and
+`getObjectUrl(key, expiresIn)` helpers for the S3-compatible endpoint. The default
+bucket is `assets`, and signed download URLs expire after one hour by default.
+Import these helpers only in server code. The upload UI is not yet connected to
+this storage. Standalone scripts using dotenv must explicitly load `.env.local`
+(dotenv's default filename is `.env`).
+
 ```bash
 npm install
 npm test        # engine งบ/ขนาด (node scripts/plan.test.mts)

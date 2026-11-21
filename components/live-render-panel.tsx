@@ -1,5 +1,6 @@
 'use client'
 import {useEffect, useRef, useState} from 'react'
+import {ReferenceFeedback} from '@/components/reference-feedback'
 import {Button} from '@/components/ui/button'
 import type {Provider} from '@/lib/live-render-core'
 
@@ -10,8 +11,9 @@ const NAME: Record<Provider, string> = {codex: 'Codex CLI บน Mac เคร�
 
 // สร้างภาพ "หลัง" จริงด้วย AI (เฉพาะเครื่องที่เปิดไว้เท่านั้น) ต้องยินยอมก่อนส่งรูปห้อง
 // ภาพซ้อนในเบราว์เซอร์ด้านบนยังเป็นเดโมเสมอ ส่วนนี้แสดงเฉพาะภาพที่สร้างเสร็จและตรวจแล้วจริง
-export function LiveRenderPanel({provider, roomImage, meta}: {provider: Provider; roomImage: string; meta: {styleId: string; roomType: string; budget: number; width: number; items: Item[]}}) {
+export function LiveRenderPanel({provider, roomImage, roomImages = [], meta}: {provider: Provider; roomImage: string; roomImages?: string[]; meta: {styleId: string; roomType: string; budget: number; width: number; items: Item[]}}) {
   const [consent, setConsent] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [job, setJob] = useState<Job | null>(null)
   const [error, setError] = useState('')
   const poll = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -26,12 +28,15 @@ export function LiveRenderPanel({provider, roomImage, meta}: {provider: Provider
   }
 
   async function generate() {
+    setSubmitting(true)
     setError(''); setJob(null)
     try {
-      const blob = await (await fetch(roomImage)).blob()
-      if (!['image/jpeg', 'image/png', 'image/webp'].includes(blob.type)) { setError('รูปห้องต้องเป็น jpg / png / webp'); return }
       const form = new FormData()
-      form.append('image', blob, 'room')
+      for (const image of (roomImages.length ? roomImages : [roomImage])) {
+        const blob = await (await fetch(image)).blob()
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(blob.type)) { setError('รูปห้องต้องเป็น jpg / png / webp'); return }
+        form.append('image', blob, 'room')
+      }
       form.append('meta', JSON.stringify(meta))
       form.append('consent', 'yes')
       const r = await fetch('/api/render/live', {method: 'POST', body: form})
@@ -39,10 +44,10 @@ export function LiveRenderPanel({provider, roomImage, meta}: {provider: Provider
       if (!r.ok) { setError(`เริ่มไม่ได้: ${body?.error?.code ?? r.status}`); return }
       setJob(body.job)
       void watch(body.job.id)
-    } catch { setError('ส่งคำขอไม่สำเร็จ') }
+    } catch { setError('ส่งคำขอไม่สำเร็จ') } finally { setSubmitting(false) }
   }
 
-  const running = job?.status === 'running'
+  const running = submitting || job?.status === 'running'
   return (
     <section className="space-y-3 rounded-3xl border border-zinc-200 bg-white p-4">
       <div className="flex items-baseline justify-between gap-2">
@@ -51,7 +56,7 @@ export function LiveRenderPanel({provider, roomImage, meta}: {provider: Provider
       </div>
       <label className="flex items-start gap-2 text-xs text-zinc-700">
         <input type="checkbox" checked={consent} disabled={running} onChange={e => setConsent(e.target.checked)} className="mt-0.5 size-4 accent-[var(--color-brand)]" />
-        ยินยอมส่งรูปห้องนี้ให้ {NAME[provider]} {provider === 'codex' ? '(ใช้บัญชีที่ล็อกอินไว้ ซึ่งส่งต่อไปที่ OpenAI)' : ''} เพื่อสร้างภาพ 1 ภาพ ไฟล์รูปห้องถูกลบหลังสร้างเสร็จ
+        ยินยอมส่งภาพอ้างอิงทั้งหมด {roomImages.length || 1} รูปให้ {NAME[provider]} {provider === 'codex' ? '(ใช้บัญชีที่ล็อกอินไว้ ซึ่งส่งต่อไปที่ OpenAI)' : ''} เพื่อสร้างภาพ 1 ภาพ ไฟล์รูปห้องถูกลบหลังสร้างเสร็จ
       </label>
       <div className="flex gap-2">
         <Button className="flex-1" disabled={!consent || running} onClick={() => void generate()}>{running ? 'กำลังสร้างภาพ…' : 'สร้างภาพหลังด้วย AI'}</Button>
@@ -64,6 +69,7 @@ export function LiveRenderPanel({provider, roomImage, meta}: {provider: Provider
       )}
       {job?.status === 'succeeded' && job.output && (
         <figure className="space-y-2">
+          <ReferenceFeedback count={roomImages.length || 1} />
           <img src={`/api/render/live/${job.id}/image`} alt="ภาพหลังที่ AI สร้างจากรูปห้อง" className="w-full rounded-2xl" />
           <figcaption className="text-xs text-zinc-600">
             ภาพนี้สร้างจริงโดย {NAME[provider]} ({job.output.width}×{job.output.height}) เป็นภาพจำลอง ไม่ได้ยืนยันขนาดจริง ควรวัดพื้นที่ก่อนซื้อ
