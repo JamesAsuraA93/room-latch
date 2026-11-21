@@ -179,11 +179,10 @@ export function parsePlacements(value: unknown, ids: string[]): Placement[] | nu
 }
 
 // Where a product lands when the model gave no usable spot: on the floor near the front, in a row.
-const DEFAULT_FLOOR_Y = 85, DEFAULT_WIDTH = 20, DEFAULT_HEIGHT = 25
-
 /**
- * Last resort after the strict answers failed: never null. Each id takes the first valid entry from any answer
- * (later answers first), and anything still missing gets a default slot so the render can go on.
+ * Last resort after the strict answers failed: keep every product that got one usable spot in any answer (later
+ * answers first) and DROP the rest. A product the model cannot place in this room (a curtain with no window in
+ * view, an item seen from the wrong angle) is left out rather than pasted somewhere made up.
  */
 export function salvagePlacements(answers: unknown[], ids: string[]): Placement[] {
   const found = new Map<string, Placement>()
@@ -197,9 +196,7 @@ export function salvagePlacements(answers: unknown[], ids: string[]): Placement[
       if (one) found.set(id, one[0])
     }
   }
-  return ids.map((id, i) => found.get(id) ?? {
-    id, centerX: 100 * (i + 1) / (ids.length + 1), floorY: DEFAULT_FLOOR_Y, width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT,
-  })
+  return ids.flatMap(id => found.get(id) ?? [])
 }
 
 /** Camera geometry of the room photo, in percent of the image height: enough to turn real cm into pixels on the floor. */
