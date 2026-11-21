@@ -53,9 +53,14 @@ create table shopee_listings (
   evidence_status text not null,            -- raw status from the source file
   dimensions_cm   text,                     -- as stated on the listing, variant unconfirmed; null = not stated
   notes           text not null default '',
-  source          text not null check (source in ('snapshot', 'addition', 'exact_match')),
+  source          text not null constraint shopee_listings_source_check check (source in ('snapshot', 'addition', 'exact_match', 'search')),
   shown_in_rooms  text[] not null default '{}',  -- exact matches shown on these room types
   checked_on      date not null,
+  -- source 'search' rows only (scripts/gather-shopee.mts); image_url links Shopee's CDN, no photo is stored
+  image_url       text,
+  price_thb       numeric(12, 2),
+  shop_name       text,
+  rating          real,
   unique (shop_id, item_id),
   check (id = 'shopee-' || shop_id || '-' || item_id)
 );
