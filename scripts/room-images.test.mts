@@ -1,6 +1,9 @@
 import {readStyleReference, saveStyleReference, STYLE_REFERENCE_KEY} from '../lib/style-reference.ts'
 import assert from 'node:assert/strict'
 import {readRoomImages, saveRoomImages, referenceCompleteness} from '../lib/room-images.ts'
+import {readFloorPlan, saveFloorPlan, parseRoomArea} from '../lib/floor-plan.ts'
+import {FLOOR_PLAN_KEY} from '../lib/storage-keys.ts'
+import {buildPrompt} from '../lib/live-render-core.ts'
 const values = new Map<string, string>()
 let rejectKey = ''
 Object.defineProperty(globalThis, 'sessionStorage', {value: {
@@ -38,3 +41,27 @@ assert.equal(saveStyleReference(''), true)
 assert.equal(readStyleReference(), '')
 assert.equal(readRoomImages().length, 4, 'removing style inspiration preserves room images')
 console.log('custom reference storage isolation and replacement ok')
+
+assert.equal(saveFloorPlan('floor-plan'), true)
+assert.equal(readFloorPlan(), 'floor-plan')
+assert.equal(readRoomImages().length, 4, 'floor plan does not consume room photo slots')
+rejectKey = FLOOR_PLAN_KEY
+assert.equal(saveFloorPlan('new-plan'), false)
+assert.equal(readFloorPlan(), 'floor-plan')
+rejectKey = ''
+saveRoomImages([])
+assert.deepEqual(readRoomImages(), [], 'a floor plan cannot count as the required room photo')
+assert.equal(readFloorPlan(), 'floor-plan', 'room removal preserves the separate floor plan')
+saveFloorPlan('')
+assert.equal(readFloorPlan(), '')
+for (const input of [null, undefined, '']) assert.deepEqual(parseRoomArea(input), {ok: true})
+for (const input of [25, '25.5', '.5', '0.01', 10000]) assert.deepEqual(parseRoomArea(input), {ok: true, value: Number(input)})
+for (const input of [0, -1, 'NaN', Infinity, 10001, '2.555', ' ', {}, '0x20']) assert.equal(parseRoomArea(input).ok, false)
+const style = {key:'minimal', th:'มินิมอล', prompt:'simple'}
+const prompt = buildPrompt(style, [], 'input.jpg', ['reference-1.jpg'], 'style-reference.jpg', [], 'openai', {floorPlanFile:'floor-plan.png', roomAreaM2:25.5})
+assert.match(prompt, /FLOOR PLAN \(floor-plan.png\)/)
+assert.match(prompt, /25.5 square metres/)
+assert.match(prompt, /edit only the FIRST room photo/)
+assert.match(prompt, /LAST attached image \(style-reference.jpg\)/)
+assert.doesNotMatch(buildPrompt(style, [], 'input.jpg'), /FLOOR PLAN|square metres/)
+console.log('optional floor plan isolation, room area validation and render context passed')

@@ -47,6 +47,10 @@ limits; the output image is at `renders/<job id>.png` in Object storage. Rows an
 after a job starts. `client_key` is a hash of the caller's IP, never the address. Existing databases need
 `db/migrations/002-render-jobs.sql`. `npm run test:db` exercises the store in a rolled-back transaction.
 
+`recommend_calls` counts decision-model calls by `POST /api/recommend` for its daily limits (same hashed
+`client_key`, purged after 24 hours). Over a limit the route answers with the free rules pick instead.
+Existing databases need `db/migrations/005-recommend-calls.sql`.
+
 `checks.sql` exercises these rules in a rolled-back transaction and prints `checks ok`.
 
 ## Load into Neon

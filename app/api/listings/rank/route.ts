@@ -2,7 +2,7 @@
 // multipart: image (the room photo), style (app style id), ids (JSON array of listing ids, ≤ MAX_RANK_IDS)
 import {readFileSync} from 'node:fs'
 import path from 'node:path'
-import {sameOrigin} from '@/lib/live-render-core'
+import {sameOriginRefusal} from '@/lib/live-render-core'
 import {FormRefusal, imageDataUrl, readCappedForm} from '@/lib/form-image'
 import {MAX_RANK_IDS, rankForRoom} from '@/lib/image-search'
 import {DecisionsError} from '@/lib/decisions'
@@ -23,8 +23,8 @@ function styleText(key: string): {th: string; prompt: string} | null {
 
 export async function POST(req: Request) {
   if (!process.env.OPENAI_API_KEY) return err(404, 'rank_disabled')
-  const gate = sameOrigin(req.headers, 'POST')
-  if (!gate.ok) return err(gate.status, gate.code)
+  const refused = sameOriginRefusal(req.headers, 'POST')
+  if (refused) return err(403, refused)
   try {
     const form = await readCappedForm(req)
     const style = String(form.get('style') ?? '')

@@ -3,7 +3,7 @@ import {useState} from 'react'
 import {styleName} from '@/lib/demo'
 import {REAL_CATEGORIES, type RealCategory, type RealProduct, type Verification} from '@/lib/real-catalog'
 
-const CAT: Record<RealCategory, string> = {seating: 'ที่นั่ง', table: 'โต๊ะ', light: 'ไฟ', textile: 'ผ้า/พรม', accent: 'ของตกแต่ง'}
+export const CAT: Record<RealCategory, string> = {seating: 'ที่นั่ง', table: 'โต๊ะ', light: 'ไฟ', textile: 'ผ้า/พรม', accent: 'ของตกแต่ง'}
 const BADGE: Record<Verification, {label: string; cls: string}> = {
   photo: {label: 'เปิดรูปแกลเลอรีแล้ว · ตัวเลือกยังไม่ยืนยัน', cls: 'bg-brand-soft text-brand'},
   listing: {label: 'ยืนยันแค่ลิงก์ประกาศ', cls: 'bg-zinc-200 text-ink'},

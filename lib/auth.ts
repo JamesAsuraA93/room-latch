@@ -29,6 +29,8 @@ async function createProfile(user: {id: string; email: string; name: string}) {
 export const auth = betterAuth({
   database: db(),
   emailAndPassword: {enabled: true},
+  // Locally (no BETTER_AUTH_URL) Next reports 127.0.0.1 requests as localhost, so sign-in from 127.0.0.1 would be "Invalid origin"
+  trustedOrigins: process.env.BETTER_AUTH_URL ? [] : ['http://127.0.0.1:*'],
   databaseHooks: {user: {create: {after: createProfile}}},
 })
 

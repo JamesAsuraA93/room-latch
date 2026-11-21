@@ -8,7 +8,7 @@ export const DialogTrigger = DialogPrimitive.Trigger
 export const DialogTitle = DialogPrimitive.Title
 export const DialogDescription = DialogPrimitive.Description
 
-export function DialogContent({children, ...props}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+export function DialogContent({children, closeLabel = t.close, ...props}: React.ComponentProps<typeof DialogPrimitive.Content> & {closeLabel?: string}) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/40" />
@@ -16,7 +16,7 @@ export function DialogContent({children, ...props}: React.ComponentProps<typeof 
         {children}
         {/* มือถือไม่มีปุ่ม Esc ถ้าไม่มีปุ่มนี้จะปิดได้ทางเดียวคือแตะพื้นหลัง */}
         <DialogPrimitive.Close className="mt-5 min-h-12 w-full rounded-2xl border border-zinc-200 text-sm font-semibold text-zinc-900 hover:bg-zinc-50">
-          {t.close}
+          {closeLabel}
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

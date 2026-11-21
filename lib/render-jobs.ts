@@ -16,9 +16,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export const renderPath = (id: string) => `renders/${id}.png`
 
 export type Limits = {perClient: number; total: number}
+const count = (value: string | undefined, fallback: number) => value && /^\d+$/.test(value) ? Number(value) : fallback
 /** Renders allowed per 24 hours: per caller, and for the whole deployment (the spending ceiling). */
 export function renderLimits(env: Env): Limits {
-  const count = (value: string | undefined, fallback: number) => value && /^\d+$/.test(value) ? Number(value) : fallback
   return {perClient: count(env.ROOMLATCH_RENDER_DAILY_LIMIT, 5), total: count(env.ROOMLATCH_RENDER_DAILY_CAP, 100)}
 }
 
@@ -44,7 +44,25 @@ export async function reserveJob(id: string, clientKey: string, limits: Limits, 
   return null
 }
 
-export type StoredOutput = {path: string; width: number; height: number; bytes: number}
+/** Recommend calls allowed per 24 hours (each is up to 2 decision-model calls, ~$0.01). */
+export function recommendLimits(env: Env): Limits {
+  return {perClient: count(env.ROOMLATCH_RECOMMEND_DAILY_LIMIT, 20), total: count(env.ROOMLATCH_RECOMMEND_DAILY_CAP, 500)}
+}
+
+/** Count one recommend model call unless the caller or the deployment is over its daily limit; false = over. */
+export async function reserveModelCall(clientKey: string, limits: Limits, sql: Sql = db()): Promise<boolean> {
+  await sql.query(`delete from recommend_calls where at < now() - ${RETENTION}`)
+  // one statement: the count and the insert see the same snapshot (parallel calls can still overshoot by a few)
+  const {rowCount} = await sql.query(
+    `insert into recommend_calls (client_key)
+     select $1 from (select count(*) filter (where client_key = $1)::int as mine, count(*)::int as total
+                       from recommend_calls where at > now() - ${RETENTION}) used
+      where used.mine < $2 and used.total < $3`,
+    [clientKey, limits.perClient, limits.total])
+  return rowCount === 1
+}
+
+export type StoredOutput ={path: string; width: number; height: number; bytes: number}
 export type StoredJob = {
   id: string
   status: 'running' | 'succeeded' | 'failed' | 'cancelled'

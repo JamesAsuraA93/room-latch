@@ -1,80 +1,48 @@
 import Link from 'next/link'
-import {ArrowUpRight, Camera, Palette, SlidersHorizontal} from 'lucide-react'
-import {FeedList} from '@/components/feed-list'
+import {ArrowRight, Camera, Armchair, Sparkles} from 'lucide-react'
 import {DemoButton, StartButton} from '@/components/start-button'
-import {styleImage, styleName} from '@/lib/demo'
+import {StyleInspiration} from '@/components/style-inspiration'
+import {styleImage} from '@/lib/demo'
 
 const STEPS = [
-  {icon: Camera, title: '01 · รูปห้อง', hint: 'เพิ่มได้ 4 มุม'},
-  {icon: Palette, title: '02 · สไตล์', hint: 'เลือกหรือเพิ่มภาพเอง'},
-  {icon: SlidersHorizontal, title: '03 · งบของคุณ', hint: 'เลือกของให้พอดี'},
+  {icon: Camera, title: 'รูปห้อง สไตล์ งบ'},
+  {icon: Armchair, title: 'เลือกและเปลี่ยนสินค้า'},
+  {icon: Sparkles, title: 'ดูผลลัพธ์'},
 ]
 
 export default function Home() {
-  return <div className="space-y-9">
-    <section className="grid items-center gap-6 md:grid-cols-[.85fr_1.15fr]">
+  return <div className="space-y-8 md:space-y-10">
+    <section className="grid items-center gap-6 md:grid-cols-2 md:gap-10">
       <div className="space-y-5">
-        <p className="rl-section-label">YOUR SPACE, YOUR WAY</p>
-        <h1 className="text-3xl font-semibold leading-[1.45] tracking-tight md:text-[38px]">ห้องเดิมของคุณ<br /><span className="text-brand">ในแบบที่ชอบกว่าเดิม</span></h1>
-        <p className="max-w-sm text-sm leading-7 text-zinc-500">เริ่มจากรูปห้อง เลือกบรรยากาศที่ชอบ<br />แล้วค่อยหาของที่พอดีกับพื้นที่และงบของคุณ</p>
-        <div className="space-y-2 md:max-w-xs">
-          <StartButton className="w-full" />
-          <DemoButton variant="ghost" className="w-full" />
+        <h1 className="text-[32px] font-semibold leading-[1.4] tracking-tight lg:text-[42px]">ห้องเดิมของคุณ<br /><span className="text-brand">ในสไตล์ที่ชอบ</span></h1>
+        <p className="max-w-sm text-base leading-7 text-zinc-600">ลองแต่งห้องจากรูปของคุณ<br className="hidden md:block" /> พร้อมเลือกของให้พอดีกับงบ</p>
+        <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:flex-wrap">
+          <StartButton />
+          <DemoButton variant="outline" />
         </div>
+        <p className="text-sm text-zinc-500">เริ่มได้เลย ไม่ต้องสมัครสมาชิก</p>
       </div>
-      <div className="rl-photo relative overflow-hidden rounded-[30px]">
-        <img src={styleImage('japandi')} alt="ห้องนั่งเล่นโทนไม้ธรรมชาติสำหรับดูเป็นแรงบันดาลใจ" className="aspect-[4/3] w-full object-cover" />
-        <div className="absolute inset-x-4 bottom-4 flex items-center justify-between rounded-2xl bg-white/95 p-4 backdrop-blur">
-          <div>
-            <p className="text-sm font-semibold">A softer kind of living</p>
-            <p className="mt-1 text-xs text-zinc-500">ภาพแรงบันดาลใจ · Japandi</p>
-          </div>
-          <Link href="/style" aria-label="สำรวจสไตล์" className="flex size-10 items-center justify-center rounded-full bg-brand-soft text-brand">
-            <ArrowUpRight className="size-5" />
-          </Link>
-        </div>
-      </div>
+      <figure className="rl-photo relative overflow-hidden rounded-[24px]">
+        <img src={styleImage('japandi')} alt="ไอเดียห้องนั่งเล่นโทนไม้ธรรมชาติ" fetchPriority="high" className="aspect-[16/10] max-h-[55dvh] w-full object-cover" />
+        <figcaption className="absolute bottom-4 left-4 rounded-full bg-white/95 px-4 py-2 text-sm font-medium">ห้องตัวอย่าง · เจแปนดิ</figcaption>
+      </figure>
     </section>
 
-    <div className="grid grid-cols-3 gap-3 rounded-[26px] bg-white p-4 md:p-5">
-      {STEPS.map(({icon: Icon, title, hint}) => (
-        <div key={title} className="flex flex-col items-center gap-2 text-center md:flex-row md:gap-3 md:text-left">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-paper text-brand"><Icon className="size-5" /></span>
-          <div>
-            <p className="text-xs font-semibold md:text-sm">{title}</p>
-            <p className="mt-1 text-[10px] text-zinc-500 md:text-xs">{hint}</p>
-          </div>
-        </div>
-      ))}
-    </div>
+    <ol aria-label="เริ่มออกแบบใน 3 ขั้นตอน" className="grid grid-cols-3 gap-2 border-y border-[#e6dfd7] py-5 sm:gap-4">
+      {STEPS.map(({icon: Icon, title}, i) => <li key={title} className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-3">
+        <Icon aria-hidden="true" className="size-5 shrink-0 text-brand" />
+        <span className="text-xs font-medium sm:text-sm"><span className="mr-1.5 text-brand">{i + 1}.</span>{title}</span>
+      </li>)}
+    </ol>
 
     <section className="space-y-4">
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="rl-section-label">ROOM INSPIRATION</p>
-          <h2 className="mt-2 text-xl font-semibold">ไอเดียสำหรับห้องของคุณ</h2>
-        </div>
-        <span className="text-xs text-zinc-500">ภาพตัวอย่าง</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-xl font-semibold md:text-2xl">เริ่มจากสไตล์ที่ชอบ</h2>
+        <Link href="/feed" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-brand">ดูห้องจากชุมชน<ArrowRight aria-hidden="true" className="size-4" /></Link>
       </div>
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-        {['muji', 'loft', 'scandi'].map(id => (
-          <Link key={id} href="/style" className="rl-room-choice overflow-hidden rounded-[24px] bg-white last:hidden md:last:block">
-            <img src={styleImage(id, 600)} alt={`แรงบันดาลใจสไตล์ ${styleName(id)}`} className="aspect-[4/3] w-full object-cover" />
-            <div className="flex items-center justify-between p-4">
-              <div>
-                <h3 className="text-sm font-semibold">{styleName(id)}</h3>
-                <p className="mt-1 text-[11px] text-zinc-500">ดูสไตล์และเริ่มออกแบบ</p>
-              </div>
-              <ArrowUpRight className="size-4 text-brand" />
-            </div>
-          </Link>
-        ))}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+        {['muji', 'minimal', 'scandi'].map(id => <StyleInspiration key={id} id={id} />)}
       </div>
     </section>
-
-    <details className="rl-disclosure">
-      <summary>สำรวจฟีดและห้องที่บันทึกไว้</summary>
-      <FeedList tabs />
-    </details>
   </div>
 }

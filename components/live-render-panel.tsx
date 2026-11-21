@@ -12,8 +12,9 @@ import type {Provider} from '@/lib/live-render-core'
 import {MAX_PRODUCT_IMAGES} from '@/lib/product-render'
 
 type Item = {id: string; x: number; y: number; w: number}
-type ProductPhotoOption = {id: string; name: string; image?: string; widthCm?: number}
-type AttachedProduct = ProductPhotoOption & {image: string}
+// listing = a Shopee listing whose photo the server already holds: it can be added without an upload
+type ProductPhotoOption = {id: string; name: string; image?: string; widthCm?: number; listing?: boolean}
+type AttachedProduct = ProductPhotoOption
 type Job = {id: string; status: 'running' | 'succeeded' | 'failed' | 'cancelled'; error?: string; output?: {width: number; height: number}}
 const ERRORS: Record<string, string> = {
   live_render_disabled: 'เซิร์ฟเวอร์นี้ยังไม่ได้เปิดการสร้างภาพด้วย AI',
@@ -26,6 +27,10 @@ const ERRORS: Record<string, string> = {
   rate_limited: 'วันนี้คุณสร้างภาพครบจำนวนที่กำหนดแล้ว กรุณาลองใหม่พรุ่งนี้',
   daily_cap_reached: 'วันนี้มีผู้ใช้สร้างภาพครบโควตาของระบบแล้ว กรุณาลองใหม่พรุ่งนี้',
   job_store_unavailable: 'ระบบสร้างภาพยังไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง',
+  listing_photo_missing: 'ยังไม่มีรูปประกาศของสินค้าบางชิ้นในระบบ กรุณาแนบรูปสินค้าเอง',
+  cutout_failed: 'แยกสินค้าออกจากรูปประกาศไม่สำเร็จ กรุณาแนบรูปที่เห็นสินค้าชัดกว่านี้',
+  size_failed: 'อ่านขนาดจริงของสินค้าไม่ได้ กรุณากรอกความกว้างของสินค้า',
+  placement_failed: 'จัดตำแหน่งสินค้าในห้องไม่สำเร็จ กรุณาลองใหม่',
   storage_failed: 'สร้างภาพแล้วแต่บันทึกไม่สำเร็จ กรุณาลองอีกครั้ง',
   body_too_large: 'รูปทั้งหมดมีขนาดใหญ่เกินไป กรุณาลดขนาดรูป',
   timeout: 'ใช้เวลานานเกินกำหนด กรุณาลองใหม่',
@@ -33,7 +38,7 @@ const ERRORS: Record<string, string> = {
 }
 const errorText = (code: string) => ERRORS[code] || `ไม่สามารถสร้างภาพได้ (${code})`
 
-export function LiveRenderPanel({provider, ready = true, roomImage, roomImages = [], products = [], meta}: {
+export function LiveRenderPanel({ready = true, roomImage, roomImages = [], products = [], meta}: {
   provider: Provider; ready?: boolean; roomImage: string; roomImages?: string[]; products?: ProductPhotoOption[];
   meta: {styleId: string; roomType: string; budget: number; width: number; items: Item[]}
 }) {
@@ -60,7 +65,7 @@ export function LiveRenderPanel({provider, ready = true, roomImage, roomImages =
     setStyleReference(readStyleReference())
     try {
       const saved = JSON.parse(sessionStorage.getItem(PRODUCT_RENDER_KEY) || '[]')
-      if (Array.isArray(saved)) setAttached(saved.filter((p): p is AttachedProduct => !!p && typeof p.id === 'string' && typeof p.name === 'string' && typeof p.image === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(p.image)).slice(0, MAX_PRODUCT_IMAGES))
+      if (Array.isArray(saved)) setAttached(saved.filter((p): p is AttachedProduct => !!p && typeof p.id === 'string' && typeof p.name === 'string' && (typeof p.image === 'string' ? /^data:image\/(jpeg|png|webp);base64,/.test(p.image) : p.listing === true && p.id.startsWith('shopee-'))).slice(0, MAX_PRODUCT_IMAGES))
     } catch {}
     return () => { mounted.current = false; if (poll.current) clearTimeout(poll.current) }
   }, [])
@@ -130,9 +135,9 @@ export function LiveRenderPanel({provider, ready = true, roomImage, roomImages =
         if (!['image/jpeg','image/png','image/webp'].includes(blob.type)) throw new Error('รูปห้องต้องเป็น JPG, PNG หรือ WebP')
         form.append('image', blob, 'room')
       }
-      for (const product of attached) form.append('productImage', await (await fetch(product.image)).blob(), `${product.id}.jpg`)
+      for (const product of attached) if (product.image) form.append('productImage', await (await fetch(product.image)).blob(), `${product.id}.jpg`)
       if (styleReference) form.append('styleReference', await (await fetch(styleReference)).blob(), 'style-reference.jpg')
-      form.append('productMeta', JSON.stringify(attached.map(({id,name,widthCm}) => ({id,name,widthCm}))))
+      form.append('productMeta', JSON.stringify(attached.map(({id,name,widthCm,image}) => ({id,name,widthCm,source: image ? 'upload' : 'listing'}))))
       form.append('meta', JSON.stringify({...meta, items: attached.map(p => meta.items.find(i => i.id === p.id) || {id:p.id,x:0,y:0,w:0})}))
       form.append('consent', 'yes')
       const r = await fetch('/api/render/live', {method:'POST', body:form})
@@ -153,8 +158,8 @@ export function LiveRenderPanel({provider, ready = true, roomImage, roomImages =
         <div className="flex items-center justify-between gap-3 px-2 pb-3 pt-1">
           <h2 className="text-sm font-semibold">{afterImage ? 'ภาพจำลองจาก AI' : 'ห้องของคุณ'}</h2>
           <div className="flex rounded-full bg-paper p-1">
-            <button type="button" aria-pressed={view === 'before'} onClick={() => setView('before')} className={`rounded-full px-4 py-2 text-xs ${view === 'before' ? 'bg-white shadow-sm' : ''}`}>ก่อน</button>
-            <button type="button" disabled={!output} aria-pressed={view === 'after'} onClick={() => setView('after')} className={`rounded-full px-4 py-2 text-xs disabled:opacity-40 ${view === 'after' ? 'bg-white shadow-sm' : ''}`}>หลัง</button>
+            <button type="button" aria-pressed={view === 'before'} onClick={() => setView('before')} className={`min-h-11 rounded-full px-4 py-2 text-sm ${view === 'before' ? 'bg-white shadow-sm' : ''}`}>ก่อน</button>
+            <button type="button" disabled={!output} aria-pressed={view === 'after'} onClick={() => setView('after')} className={`min-h-11 rounded-full px-4 py-2 text-sm disabled:opacity-40 ${view === 'after' ? 'bg-white shadow-sm' : ''}`}>หลัง</button>
           </div>
         </div>
         <div className="relative overflow-hidden rounded-[22px] bg-[#e9e2d9]">
@@ -178,22 +183,21 @@ export function LiveRenderPanel({provider, ready = true, roomImage, roomImages =
         {styleReference && (
           <figure className="shrink-0">
             <img src={styleReference} alt="ภาพสไตล์อ้างอิง" className="h-16 w-20 rounded-xl object-cover" />
-            <figcaption className="mt-1 text-[10px] text-zinc-500">สไตล์อ้างอิง</figcaption>
+            <figcaption className="mt-1 text-xs text-zinc-500">สไตล์อ้างอิง</figcaption>
           </figure>
         )}
       </div>
-      <p className="text-xs leading-6 text-zinc-500">AI ใช้รูปสินค้าที่คุณแนบเพื่อจำลองรูปทรง สี และวัสดุในห้อง ภาพอาจคลาดเคลื่อนจากสินค้าหรือขนาดจริง</p>
+      <p className="text-xs leading-6 text-zinc-500">ภาพ AI เป็นภาพจำลอง สี รูปทรง และขนาดอาจต่างจากสินค้าจริง</p>
     </div>
 
     <div className="space-y-4 rounded-[28px] bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <div>
-          <p className="rl-section-label">PRODUCTS IN YOUR ROOM</p>
-          <h2 className="mt-2 text-lg font-semibold">นำสินค้าจริงมาลองวาง</h2>
+          <h2 className="text-lg font-semibold">เพิ่มสินค้าที่อยากลอง</h2>
         </div>
         <span className="rounded-full bg-brand-soft px-3 py-2 text-xs font-semibold text-brand">{attached.length}/{MAX_PRODUCT_IMAGES}</span>
       </div>
-      <p className="text-xs leading-6 text-zinc-500">แนบรูปสินค้าที่เห็นตัวชิ้นชัด ๆ ระบบส่งเฉพาะสินค้าที่มีรูปด้านล่างให้ AI</p>
+      <p className="text-xs leading-6 text-zinc-500">เพิ่มรูปสินค้าอย่างน้อย 1 ชิ้น แล้วสร้างภาพจำลองในห้องของคุณ</p>
       <div role="button" tabIndex={0} aria-label="เพิ่มรูปสินค้าจริง ลากวาง คลิก หรือวางรูปจากคลิปบอร์ด" aria-disabled={locked || full}
         {...pressProps(() => { if (!locked && !full) pick(null) })}
         onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = running ? 'none' : 'copy'; setDragging(true) }}
@@ -202,8 +206,8 @@ export function LiveRenderPanel({provider, ready = true, roomImage, roomImages =
         onPaste={e => { const files = Array.from(e.clipboardData.files); if (files.length) { e.preventDefault(); void addFiles(files) } }}
         className={`cursor-pointer rounded-2xl border-2 border-dashed p-5 text-center focus-visible:outline-2 focus-visible:outline-brand ${dragging ? 'border-brand bg-brand-soft' : 'border-[#ded4c9] bg-paper'}`}>
         <ImagePlus className="mx-auto mb-2 size-6 text-brand" />
-        <p className="text-sm font-semibold">{preparing ? 'กำลังเตรียมรูป…' : full ? 'ครบ 6 ชิ้นแล้ว' : 'ลากรูปสินค้ามาวาง หรือคลิกเพิ่มรูป'}</p>
-        <p className="mt-2 text-[11px] text-zinc-500">คลิกกรอบแล้ว Cmd+V / Ctrl+V เพื่อวางรูป</p>
+        <p className="text-sm font-semibold">{preparing ? 'กำลังเตรียมรูป…' : full ? 'ครบ 6 ชิ้นแล้ว' : 'เพิ่มรูปสินค้า'}</p>
+        <p className="mt-2 text-xs text-zinc-500">คลิก ลากวาง หรือวางด้วย Cmd+V / Ctrl+V</p>
       </div>
       <input ref={chooser} type="file" accept="image/*" multiple className="hidden" onChange={e => { void addFiles(pickedFiles(e), target.current); target.current = null }} />
 
@@ -211,21 +215,23 @@ export function LiveRenderPanel({provider, ready = true, roomImage, roomImages =
         {attached.map((p, i) => (
           <div key={p.id} className="flex gap-3 rounded-2xl border border-[#ece6df] p-3">
             <button type="button" disabled={locked} aria-label={`เปลี่ยนรูป ${p.name}`} onClick={() => pick(p)} className="shrink-0 rounded-xl focus-visible:outline-2 focus-visible:outline-brand">
-              <img src={p.image} alt={p.name} className="size-20 rounded-xl bg-paper object-contain" />
+              {p.image
+                ? <img src={p.image} alt={p.name} className="size-20 rounded-xl bg-paper object-contain" />
+                : <span className="flex size-20 items-center justify-center rounded-xl bg-paper p-2 text-center text-[10px] leading-4 text-zinc-500">ใช้รูปจากประกาศ</span>}
             </button>
             <div className="min-w-0 flex-1">
-              <label className="block text-[10px] text-zinc-500" htmlFor={`product-name-${i}`}>สินค้า {i + 1}</label>
+              <label className="block text-xs text-zinc-500" htmlFor={`product-name-${i}`}>สินค้า {i + 1}</label>
               <input id={`product-name-${i}`} value={p.name} maxLength={160} disabled={locked || !p.id.startsWith('custom-')}
                 onChange={e => patch(p.id, {name: e.target.value})}
-                className="mt-1 w-full rounded-lg bg-paper p-2 text-xs disabled:bg-transparent disabled:opacity-100" />
-              <label className="mt-2 flex items-center gap-2 text-[10px] text-zinc-500">
+                className="mt-1 min-h-11 w-full rounded-lg bg-paper p-2 text-base disabled:bg-transparent disabled:opacity-100" />
+              <label className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
                 กว้าง (ซม.)
                 <input aria-label={`ความกว้าง ${p.name}`} type="number" min={1} max={1000} disabled={locked} value={p.widthCm ?? ''}
                   onChange={e => patch(p.id, {widthCm: e.target.value ? Number(e.target.value) : undefined})}
-                  placeholder="ถ้าทราบ" className="w-20 rounded-lg border border-zinc-200 px-2 py-1.5" />
+                  placeholder="ถ้าทราบ" className="min-h-11 w-20 rounded-lg border border-zinc-200 px-2 py-1.5 text-base" />
               </label>
             </div>
-            <button type="button" disabled={locked} aria-label={`ลบสินค้า ${p.name}`} onClick={() => update(attached.filter(item => item.id !== p.id))} className="flex size-9 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-red-50 hover:text-red-700">
+            <button type="button" disabled={locked} aria-label={`ลบสินค้า ${p.name}`} onClick={() => update(attached.filter(item => item.id !== p.id))} className="flex size-11 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-red-50 hover:text-red-700">
               <Trash2 className="size-4" />
             </button>
           </div>
@@ -234,11 +240,11 @@ export function LiveRenderPanel({provider, ready = true, roomImage, roomImages =
 
       {products.length > 0 && (
         <details className="rounded-2xl bg-paper p-3">
-          <summary className="text-xs font-semibold">เพิ่มรูปให้สินค้าจากชุดแนะนำ</summary>
+          <summary className="text-xs font-semibold">เพิ่มสินค้าจากชุดแนะนำและสินค้าที่เลือก</summary>
           <div className="mt-3 space-y-2">
             {products.filter(p => !attached.some(a => a.id === p.id)).map(p => (
               <button key={p.id} type="button" disabled={locked || full}
-                onClick={() => { if (p.image) update([...attached, {...p, image: p.image}]); else pick(p) }}
+                onClick={() => { if (p.image || p.listing) update([...attached, p]); else pick(p) }}
                 className="flex min-h-10 w-full items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-left text-xs disabled:opacity-40">
                 <span>{p.name.replace(' (fixture)', '')}</span>
                 <Plus className="size-4 shrink-0 text-brand" />
@@ -250,18 +256,17 @@ export function LiveRenderPanel({provider, ready = true, roomImage, roomImages =
       {!ready && <p role="status" className="rounded-2xl bg-amber-50 p-3 text-xs leading-6 text-amber-900">เตรียมรูปไว้ได้เลย · เซิร์ฟเวอร์นี้ยังไม่ได้เปิดการสร้างภาพด้วย AI</p>}
       <label className="flex items-start gap-2 text-xs leading-6 text-zinc-600">
         <input type="checkbox" checked={consent} disabled={locked} onChange={e => setConsent(e.target.checked)} className="mt-1.5 size-4 shrink-0 accent-[var(--color-brand)]" />
-        <span>ยินยอมส่งรูปห้อง {roomImages.length || 1} รูป + รูปสินค้า {attached.length} รูป{styleReference ? ' + ภาพสไตล์ 1 รูป' : ''} ให้ OpenAI เพื่อสร้างภาพ มีค่าใช้จ่ายตามการใช้งาน API</span>
+        <span>ยินยอมส่งรูปห้อง {roomImages.length || 1} รูป + รูปสินค้าที่แนบ {attached.filter(p => p.image).length} รูป{styleReference ? ' + ภาพสไตล์ 1 รูป' : ''} ให้ OpenAI เพื่อสร้างภาพ มีค่าใช้จ่ายตามการใช้งาน API</span>
       </label>
       <Button className="w-full" onClick={() => void generate()}
         disabled={!ready || !consent || !attached.length || locked || attached.some(p => !p.name.trim() || (p.widthCm !== undefined && (!Number.isFinite(p.widthCm) || p.widthCm <= 0 || p.widthCm > 1000)))}>
         <Sparkles className="size-4" />
-        {running ? 'กำลังสร้างภาพ…' : 'สร้างภาพห้องพร้อมสินค้าจริง'}
+        {running ? 'กำลังสร้างภาพ…' : 'สร้างภาพห้อง'}
       </Button>
       {running && job && <Button variant="outline" className="w-full" onClick={() => cancel(job.id)}>ยกเลิกการสร้าง</Button>}
       {notice && <p role="status" className="text-xs text-zinc-500">{notice}</p>}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {job && ['failed', 'cancelled'].includes(job.status) && <p role="alert" className="text-sm text-red-700">{errorText(job.error || job.status)}</p>}
-      <p className="text-[10px] text-zinc-400">{provider === 'openai' ? 'OpenAI Images API' : 'Codex'} · สร้างครั้งละ 1 ภาพ</p>
     </div>
   </section>
 }

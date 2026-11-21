@@ -24,7 +24,7 @@ const dataUrlToBlob = async (dataUrl: string) => (await fetch(dataUrl)).blob()
 
 // ค้นด้วยรูป: ส่งรูปสินค้าที่อยากได้ไปเทียบกับคลังของเราก่อน ไม่เจอค่อยค้น Shopee แล้วเก็บเข้าคลัง
 // ผลที่เลือกจะกลายเป็นสินค้าจริงที่ใส่ในภาพ AI ได้ (id อยู่ใน DB จึงผ่าน allowlist ของ render)
-export function ImageSearch({style, onPick}: {style: string; onPick: (p: RealProduct) => void}) {
+export function ImageSearch({style, onPick}: {style: string; onPick: (p: RealProduct) => boolean}) {
   const input = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState('')
   const [busy, setBusy] = useState(false)
@@ -49,9 +49,10 @@ export function ImageSearch({style, onPick}: {style: string; onPick: (p: RealPro
 
   function pick(h: Hit) {
     if (picked.includes(h.id)) return
-    setPicked([...picked, h.id])
-    onPick({id: h.id, title: h.title, category: h.category as RealProduct['category'], styles: result?.style ? [result.style] : [],
-      url: h.url, verification: 'listing', dimensions: null, notes: 'ค้นด้วยรูป'})
+    const accepted = onPick({id: h.id, title: h.title, category: h.category as RealProduct['category'], styles: result?.style ? [result.style] : [],
+      url: h.url, verification: 'listing', dimensions: null, notes: 'ค้นด้วยรูป', price: h.price})
+    if (accepted) { setPicked([...picked, h.id]); setError('') }
+    else setError('เพิ่มรายการนี้ไม่ได้ ตรวจว่าชุดเต็มหรือเลือกสินค้านี้ไว้แล้ว')
   }
 
   return (

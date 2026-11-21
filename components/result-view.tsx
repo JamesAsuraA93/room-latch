@@ -4,9 +4,11 @@ import {readRoomImages} from '@/lib/room-images'
 import {ReferenceFeedback} from '@/components/reference-feedback'
 import {PageHeader} from '@/components/page-header'
 import {LiveRenderPanel} from '@/components/live-render-panel'
+import {AiPicks, type AiItem} from '@/components/ai-picks'
 import type {Provider} from '@/lib/live-render-core'
 import {RealProductsPicker} from '@/components/real-products-picker'
 import {ImageSearch} from '@/components/image-search'
+import {useListingRank} from '@/lib/use-listing-rank'
 import type {RealProduct} from '@/lib/real-catalog'
 import Link from 'next/link'
 import {Button} from '@/components/ui/button'
@@ -20,7 +22,7 @@ import {RoomCompare} from '@/components/room-compare'
 import {exactFor} from '@/lib/listings'
 import {baht, fill, t} from '@/lib/copy'
 import {BEFORE, BUDGET_PRESETS, DEFAULT_PLAN, EMPTY_PLACEMENT, WIDTH_PRESETS, readDrafts, readJson, readPlacement, readPlan, roomName, savePlan, shopeeSearchUrl, startDemoSession, styleName, writeDrafts, writePlacement, type Placement as PlacementState, type Plan} from '@/lib/demo'
-import {RENDER_KEY} from '@/lib/storage-keys'
+import {PRODUCT_RENDER_KEY, RENDER_KEY} from '@/lib/storage-keys'
 import {fits, minimalSwap, noFitHint, pickSet, type Change, type Product} from '@/lib/plan'
 import {Armchair, ArrowUpRight, Lamp, Ruler, Wallet, Package, SlidersHorizontal} from 'lucide-react'
 
@@ -31,13 +33,13 @@ const isLocked = (p: Product) => p.id.startsWith('custom-')
 export function ResultView({products, live = null, real = []}: {products: Product[]; live?: Provider | null; real?: RealProduct[]}) {
   // สินค้าจริงที่เลือก (แยกจากชุดที่คิดงบ) อยู่ในหน่วยความจำของหน้านี้เท่านั้น
   const [renderSession, setRenderSession] = useState(0)
+  const [aiItems, setAiItems] = useState<AiItem[]>([])
   const [realIds, setRealIds] = useState<string[]>([])
   // สินค้าที่ได้จากการค้นด้วยรูป (อยู่ใน DB แล้ว จึงใส่ภาพ AI ได้) + คะแนนความเข้ากับห้อง จาก /api/listings/rank
   const [found, setFound] = useState<RealProduct[]>([])
-  const [roomFits, setRoomFits] = useState<Record<string, number> | undefined>(undefined)
-  const [ranking, setRanking] = useState(false)
-  const [rankNote, setRankNote] = useState('')
+  const {fits: roomFits, ranking, note: rankNote, rank} = useListingRank()
   const [plan, setPlan] = useState<Plan>(DEFAULT_PLAN)
+  const [planLoaded, setPlanLoaded] = useState(false) // AiPicks waits for it: DEFAULT_PLAN would cost a model call for the wrong room
   const [before, setBefore] = useState(BEFORE)
   const [roomImages, setRoomImages] = useState<string[]>([])
   const [sample, setSample] = useState(true)
@@ -53,7 +55,7 @@ export function ResultView({products, live = null, real = []}: {products: Produc
     const images = readRoomImages()
     setRoomImages(images)
     const p = readPlan()
-    setPlan(p); setBudget(String(p.budget)); setWidth(String(p.width))
+    setPlan(p); setPlanLoaded(true); setBudget(String(p.budget)); setWidth(String(p.width))
     setPlacement(readPlacement())
     setRender(readJson<{ok: boolean; provider?: string} | null>('session', RENDER_KEY, null))
     // รูปแรกคือภาพห้องหลัก ไม่มีรูป = ใช้ห้องตัวอย่าง
@@ -79,29 +81,11 @@ export function ResultView({products, live = null, real = []}: {products: Produc
   const photoOptions = Array.from(new Map([
     ...result.items.map(p => ({id: p.id, name: p.name, image: placement.photos[p.id], widthCm: p.widthCm ?? undefined})),
     ...exactItems,
-    ...[...found, ...real].filter(p => realIds.includes(p.id)).map(p => ({id: p.id, name: p.title})),
+    ...[...found, ...real].filter(p => realIds.includes(p.id)).map(p => ({id: p.id, name: p.title, listing: true})),
+    ...aiItems.map(p => ({id: p.id, name: p.title, listing: true})),
   ].map(p => [p.id, p])).values())
 
   const allReal = useMemo(() => [...found, ...real.filter(p => !found.some(f => f.id === p.id))], [found, real])
-
-  // ส่งรูปห้องหลัก + สไตล์ + id สินค้าในสไตล์นี้ ไปให้ server ถาม Decisions API ว่าชิ้นไหนเข้ากับห้องนี้
-  async function rankByRoom() {
-    if (!before.startsWith('data:')) { setRankNote('ใช้ได้กับรูปห้องที่คุณอัปโหลดเท่านั้น (ห้องตัวอย่างยังไม่รองรับ)'); return }
-    const ids = allReal.filter(p => p.styles.includes(plan.style)).map(p => p.id).slice(0, 40)
-    if (!ids.length) { setRankNote('ยังไม่มีสินค้าในสไตล์นี้ให้เรียง'); return }
-    setRanking(true); setRankNote('')
-    try {
-      const form = new FormData()
-      form.append('image', await (await fetch(before)).blob(), 'room.jpg')
-      form.append('style', plan.style)
-      form.append('ids', JSON.stringify(ids))
-      const res = await fetch('/api/listings/rank', {method: 'POST', body: form})
-      const json = await res.json().catch(() => null)
-      if (!res.ok) { setRankNote(json?.error?.code === 'rank_disabled' ? 'เซิร์ฟเวอร์นี้ยังไม่ได้เปิดการเรียงตามห้อง' : `เรียงไม่สำเร็จ (${json?.error?.code ?? res.status})`); return }
-      setRoomFits(Object.fromEntries((json.fits as {id: string; score: number}[]).map(f => [f.id, f.score])))
-      if (json.unranked?.length) setRankNote(`${json.unranked.length} ชิ้นยังไม่มีรูปในคลัง จึงยังไม่ได้ให้คะแนน`)
-    } catch { setRankNote('เรียงไม่สำเร็จ กรุณาลองใหม่') } finally { setRanking(false) }
-  }
 
   function updatePlacement(next: PlacementState) {
     setPlacement(next)
@@ -156,39 +140,47 @@ export function ResultView({products, live = null, real = []}: {products: Produc
     <div className="space-y-6">
       <RemixBanner />
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <PageHeader title="ห้องของคุณ ในแบบที่ชอบ"><span>{roomName(plan.roomType)} · {styleName(plan.style)}</span></PageHeader>
+        <PageHeader title="จัดห้องของคุณ"><span>{roomName(plan.roomType)} · {styleName(plan.style)}</span></PageHeader>
         <Button asChild variant="outline"><Link href="/style"><SlidersHorizontal className="size-4" />เปลี่ยนสไตล์</Link></Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
           {icon: Wallet, label: 'งบที่ตั้งไว้', value: baht(plan.budget)},
           {icon: Package, label: 'ชุดแนะนำ', value: `${result.items.length} ชิ้น`},
-          {icon: Ruler, label: 'ความกว้างมุม', value: `${plan.width} ซม.`},
+          {icon: Ruler, label: 'ความกว้าง', value: `${plan.width} ซม.`},
         ].map(({icon: Icon, label, value}) => (
-          <div key={label} className="flex flex-col gap-2 rounded-[22px] bg-white p-4 md:flex-row md:items-center md:gap-4">
-            <span className="flex size-10 items-center justify-center rounded-2xl bg-brand-soft text-brand"><Icon className="size-5" /></span>
+          <div key={label} className="flex flex-col gap-2 rounded-2xl bg-white p-3 md:flex-row md:items-center md:gap-3">
+            <span className="hidden size-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand md:flex"><Icon className="size-5" /></span>
             <div>
-              <p className="text-[11px] text-zinc-500">{label}</p>
+              <p className="text-xs text-zinc-500">{label}</p>
               <p className="mt-1 text-base font-semibold md:text-xl">{value}</p>
             </div>
           </div>
         ))}
       </div>
 
+      {planLoaded && <AiPicks plan={plan} onUse={items => {
+        // Hand the set to the render panel: it restores attached products from this key when it remounts.
+        setAiItems(items)
+        try { sessionStorage.setItem(PRODUCT_RENDER_KEY, JSON.stringify(items.map(p => ({id: p.id, name: p.title, listing: true})))) } catch {}
+        setRenderSession(n => n + 1)
+        document.getElementById('render-panel')?.scrollIntoView({behavior: 'smooth', block: 'start'})
+      }} />}
+
+      <div id="render-panel" className="scroll-mt-4" />
       <LiveRenderPanel key={renderSession} provider={live ?? 'openai'} ready={!!live} roomImage={before} roomImages={roomImages}
         products={photoOptions}
         meta={{styleId: plan.style, roomType: plan.roomType, budget: plan.budget, width: plan.width, items: result.items.map(p => ({id: p.id, ...(placement.pos[p.id] ?? {x: 0, y: 0, w: 0})}))}} />
       <ReferenceFeedback count={roomImages.length} />
 
-      <details className="rl-disclosure">
+      <details open className="rl-disclosure">
         <summary>ชุดสินค้าแนะนำและงบประมาณ</summary>
         <aside className="space-y-5">
           <Card className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="rl-section-label">CURATED FOR YOUR ROOM</p>
-                <h2 className="mt-2 text-lg font-semibold">ชุดของที่แนะนำ</h2>
+                <h2 className="text-lg font-semibold">ชุดของที่แนะนำ</h2>
               </div>
               <span className="flex size-10 items-center justify-center rounded-2xl bg-[#ffdbb0] text-brand"><Armchair className="size-5" /></span>
             </div>
@@ -221,7 +213,7 @@ export function ResultView({products, live = null, real = []}: {products: Produc
                   ) : (
                     <span className="flex size-16 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl bg-paper text-[#a58a70]">
                       {p.slot === 'desk' ? <Package className="size-6" /> : /โคม|ไฟ/.test(p.name) ? <Lamp className="size-6" /> : <Armchair className="size-6" />}
-                      <span className="text-[8px] text-zinc-500">ยังไม่มีภาพ</span>
+                      <span className="text-xs text-zinc-500">ยังไม่มีภาพ</span>
                     </span>
                   )}
                   <div className="min-w-0 flex-1">
@@ -271,13 +263,16 @@ export function ResultView({products, live = null, real = []}: {products: Produc
       <details className="rl-disclosure">
         <summary>เลือกสินค้าเพิ่มเติมจาก Shopee {realIds.length ? `· เลือกแล้ว ${realIds.length} ชิ้น` : ''}</summary>
         <RealProductsPicker all={allReal} style={plan.style} selected={realIds} onChange={setRealIds}
-          fits={roomFits} onRank={rankByRoom} ranking={ranking} rankNote={rankNote} />
+          fits={roomFits} onRank={() => void rank(before, plan.style, allReal.filter(p => p.styles.includes(plan.style)).map(p => p.id))} ranking={ranking} rankNote={rankNote} />
       </details>
       <details className="rl-disclosure">
         <summary>ค้นสินค้าด้วยรูป {found.length ? `· ได้มา ${found.length} ชิ้น` : ''}</summary>
         <ImageSearch style={plan.style} onPick={p => {
+          if (realIds.includes(p.id)) return true
+          if (realIds.length >= 6) return false
           setFound(prev => prev.some(x => x.id === p.id) ? prev : [p, ...prev])
-          setRealIds(prev => prev.includes(p.id) || prev.length >= 6 ? prev : [...prev, p.id])
+          setRealIds([...realIds, p.id])
+          return true
         }} />
       </details>
       <details className="rl-disclosure">

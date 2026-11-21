@@ -38,7 +38,7 @@ export function FeedCard({post, liked, saved, onLike, onSave, onRemix, onRemove}
       <div className="relative">
         <div ref={track} onScroll={onScroll} className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth">
           {[{src: post.before, alt: t.before}, {src: post.after, alt: t.after}].map(img => (
-            <div key={img.alt} className="relative h-80 w-full shrink-0 snap-center bg-zinc-100">
+            <div key={img.alt} className="relative aspect-[4/3] w-full shrink-0 snap-center bg-zinc-100">
               {img.src
                 ? <FeedImage src={img.src} alt={`${post.roomLabel} ${img.alt}`} />
                 : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-8 text-center" data-missing-image={img.alt}>
@@ -62,7 +62,7 @@ export function FeedCard({post, liked, saved, onLike, onSave, onRemix, onRemove}
       <div role="group" aria-label={t.swipeHint} className="grid grid-cols-2 gap-2 px-3 pt-3">
         {[t.before, t.after].map((label, i) => (
           <button key={label} type="button" aria-pressed={page === i} onClick={() => show(i)}
-            className={`min-h-10 rounded-full border text-sm font-semibold ${page === i ? 'border-brand bg-brand text-white' : 'border-zinc-200 bg-white text-ink'}`}>
+            className={`min-h-11 rounded-xl border text-sm font-semibold ${page === i ? 'border-brand bg-brand text-white' : 'border-zinc-200 bg-white text-ink'}`}>
             {label}
           </button>
         ))}
@@ -83,7 +83,8 @@ export function FeedCard({post, liked, saved, onLike, onSave, onRemix, onRemove}
       </div>
 
       <div className="space-y-2.5 p-3 pt-1">
-        <p className="text-xs font-semibold text-zinc-900">{t.itemsInRoom} {post.items.length} {t.pieces} · {roomName(post.roomType)}{post.width ? ` ${post.width} ${t.cm}` : ''}</p>
+        <details className="rounded-xl bg-paper px-3">
+        <summary className="py-3 text-sm font-medium">{t.itemsInRoom} {post.items.length} {t.pieces} · {roomName(post.roomType)}{post.width ? ` ${post.width} ${t.cm}` : ''}</summary>
         <ul className="space-y-1.5">
           {post.items.map(item => (
             <li key={item.name}>
@@ -93,12 +94,13 @@ export function FeedCard({post, liked, saved, onLike, onSave, onRemix, onRemove}
                   <span className="line-clamp-2 block text-sm font-medium text-zinc-900">{item.name}</span>
                   <span className="block text-xs text-zinc-500">{item.url ? t.exactListingNote : `${t.approx} ${item.priceRange ?? ''}`}</span>
                 </span>
-                <span className="shrink-0 text-xs font-semibold text-brand">{t.viewShopee} ›</span>
+                <span className="shrink-0 text-xs font-semibold text-brand">Shopee ↗</span>
               </a>
             </li>
           ))}
         </ul>
-        <p className="text-[11px] text-zinc-400">{post.items.some(i => i.url) ? t.exactNote : t.affNote}</p>
+        <p className="py-3 text-xs leading-relaxed text-zinc-500">{post.items.some(i => i.url) ? t.exactNote : t.affNote}</p>
+        </details>
         <Button variant="outline" className="w-full border-sage/40 text-sage hover:bg-sage/5" onClick={onRemix}><Shuffle className="size-4" />{t.remix}</Button>
       </div>
     </article>

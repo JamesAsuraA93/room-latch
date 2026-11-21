@@ -38,14 +38,14 @@ export function StyleReferenceInput({onBusyChange}: {onBusyChange: (busy: boolea
   return <section className="space-y-3" aria-labelledby="custom-reference-title">
     <div>
       <h2 id="custom-reference-title" className="font-semibold">ภาพสไตล์อ้างอิงของคุณ <span className="text-sm font-normal text-zinc-500">(ไม่บังคับ)</span></h2>
-      <p id="custom-reference-help" className="mt-1 text-xs leading-relaxed text-zinc-500">เพิ่มภาพห้องที่ชอบ 1 รูป เพื่อให้ AI อ้างอิงโทนสี วัสดุ และบรรยากาศ ร่วมกับสไตล์ที่เลือก ไม่นับรวมรูปห้อง 4 รูป</p>
+      <p id="custom-reference-help" className="mt-1 text-xs leading-relaxed text-zinc-500">เพิ่ม 1 รูปเพื่อใช้โทนสีและวัสดุที่ชอบ</p>
     </div>
     <Card role="button" tabIndex={0} aria-label="เพิ่มหรือเปลี่ยนภาพสไตล์อ้างอิง" aria-describedby="custom-reference-help" aria-disabled={busy} aria-busy={busy}
       {...pressProps(() => { if (!processing.current) input.current?.click() })}
       {...dropProps}
       className={`relative flex min-h-44 cursor-pointer items-center justify-center overflow-hidden border-2 border-dashed p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${dragging ? 'border-brand bg-brand-soft' : 'bg-zinc-50 hover:border-brand'}`}>
       {image ? <img src={image} alt="ภาพสไตล์อ้างอิงของคุณ" draggable={false} className="pointer-events-none max-h-64 w-full rounded-xl object-contain" /> : <div className="pointer-events-none space-y-2 text-center">
-        <p className="text-sm font-semibold">ลากภาพสไตล์ที่ชอบมาวางที่นี่</p>
+        <p className="text-sm font-semibold">เพิ่มภาพสไตล์ที่ชอบ</p>
         <p className="text-xs text-zinc-500">คลิกเลือกไฟล์ หรือวางรูปด้วย Cmd+V / Ctrl+V</p>
       </div>}
       {(busy || dragging) && <div role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/85 text-sm font-semibold text-brand">{busy ? 'กำลังเตรียมรูป…' : 'ปล่อยเพื่อใช้เป็นภาพสไตล์อ้างอิง'}</div>}
@@ -55,7 +55,7 @@ export function StyleReferenceInput({onBusyChange}: {onBusyChange: (busy: boolea
       <span className="text-xs text-zinc-500">แนบภาพสไตล์แล้ว · คลิกภาพเพื่อเปลี่ยน</span>
       <Button variant="ghost" disabled={busy} onClick={() => { if (saveStyleReference('')) { setImage(''); setError('') } else setError('ลบรูปไม่สำเร็จ กรุณาลองอีกครั้ง') }}>ลบภาพอ้างอิง</Button>
     </div>}
-    <p className="text-xs text-zinc-500">ภาพนี้ใช้เมื่อกดสร้างภาพด้วย AI ภาพตัวอย่างแบบวางสินค้าไม่ใช้ภาพอ้างอิงนี้</p>
+    <p className="text-xs text-zinc-500">ภาพนี้จะใช้เมื่อคุณยืนยันสร้างภาพ AI</p>
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
   </section>
 }
