@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import {buildPrompt, childEnv, clientKey, gateRequest, isLoopbackHost, liveProvider, pngSize, sniffImage} from '../lib/live-render-core.ts'
 import {renderLimits, renderPath} from '../lib/render-jobs.ts'
-import {OPENAI_EDITS_URL, OpenaiRenderError, buildEditRequest, openaiEdit} from '../lib/openai-render.ts'
+import {MODEL_DEFAULTS, OPENAI_EDITS_URL, OpenaiRenderError, buildEditRequest, openaiEdit, openaiJson} from '../lib/openai-render.ts'
 import {codexFailureReason, elapsedLabel, isTerminalJob} from '../lib/render-outcome.ts'
 import {designError} from '../lib/design-errors.ts'
 
@@ -103,7 +103,9 @@ assert.equal(env.TMPDIR, '/tmp/job'); assert.ok(!env.PATH.includes('/evil'))
 const fakeEnv = {OPENAI_API_KEY: 'sk-test-not-real', OPENAI_IMAGE_MODEL: 'gpt-image-test'}
 const img = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
 assert.throws(() => buildEditRequest({image: img, mime: 'image/png', prompt: 'x', env: {OPENAI_IMAGE_MODEL: 'm'}}), (e: unknown) => (e as OpenaiRenderError).code === 'missing_api_key')
-assert.throws(() => buildEditRequest({image: img, mime: 'image/png', prompt: 'x', env: {OPENAI_API_KEY: 'k'}}), (e: unknown) => (e as OpenaiRenderError).code === 'missing_model')
+assert.equal((buildEditRequest({image: img, mime: 'image/png', prompt: 'x', env: {OPENAI_API_KEY: 'k'}}).init.body as FormData).get('model'), MODEL_DEFAULTS.render.model, 'no model set: documented default')
+const cut = buildEditRequest({image: img, mime: 'image/png', prompt: 'x', env: {OPENAI_API_KEY: 'k', OPENAI_IMAGE_MODEL: 'render-model'}, purpose: 'cutout', background: 'transparent'}).init.body as FormData
+assert.equal(cut.get('model'), MODEL_DEFAULTS.cutout.model, 'cutouts never use the render model'); assert.equal(cut.get('background'), 'transparent'); assert.equal(cut.get('quality'), MODEL_DEFAULTS.cutout.quality)
 const {url, init} = buildEditRequest({image: img, mime: 'image/png', prompt: 'hello', env: fakeEnv})
 assert.equal(url, OPENAI_EDITS_URL); assert.equal(init.method, 'POST')
 assert.equal((init.headers as Record<string, string>).Authorization, 'Bearer sk-test-not-real')
@@ -122,6 +124,14 @@ await assert.rejects(openaiEdit({image: img, mime: 'image/png', prompt: 'p', env
 const badFetch = (async () => new Response('{"data":[]}', {status: 200})) as typeof fetch
 await assert.rejects(openaiEdit({image: img, mime: 'image/png', prompt: 'p', env: fakeEnv, fetchImpl: badFetch}), (e: unknown) => (e as OpenaiRenderError).code === 'bad_response')
 assert.equal(calls, 1)
+
+// vision JSON call: image sent as a data URL, answer parsed, non-JSON refused
+let sent: {model?: string; messages?: {content: {type: string; image_url?: {url: string}}[]}[]} = {}
+const jsonFetch = (async (_u: unknown, init?: RequestInit) => { sent = JSON.parse(String(init?.body)); return new Response(JSON.stringify({choices: [{message: {content: '{"width_cm": 80}'}}]}), {status: 200}) }) as typeof fetch
+assert.deepEqual(await openaiJson({prompt: 'size?', images: [{image: img, mime: 'image/png'}], env: fakeEnv, fetchImpl: jsonFetch}), {width_cm: 80})
+assert.equal(sent.model, MODEL_DEFAULTS.vision.model); assert.match(sent.messages![0].content[1].image_url!.url, /^data:image\/png;base64,/)
+const proseFetch = (async () => new Response(JSON.stringify({choices: [{message: {content: 'sure! here'}}]}), {status: 200})) as typeof fetch
+await assert.rejects(openaiJson({prompt: 'p', images: [], env: fakeEnv, fetchImpl: proseFetch}), (e: unknown) => (e as OpenaiRenderError).code === 'bad_response')
 console.log('live-render ok')
 
 // Multiple references preserve order and the main image's camera view.
@@ -147,7 +157,12 @@ console.log('custom style reference prompt contract ok')
 // Pair product photos with the declared SKU, and keep custom labels bounded.
 const {validateProductMeta} = await import('../lib/product-render.ts')
 const known = new Map([['chair','Catalog chair']])
-assert.deepEqual(validateProductMeta([{id:'chair',name:'Client label',widthCm:60}], ['chair'], known), [{id:'chair',name:'Catalog chair',widthCm:60}])
+assert.deepEqual(validateProductMeta([{id:'chair',name:'Client label',widthCm:60}], ['chair'], known), [{id:'chair',name:'Catalog chair',widthCm:60,source:'upload'}])
+// listing photos come from our bucket, so only Shopee listing ids may skip the upload
+const knownListing = new Map([['shopee-1-2', 'Real lamp']])
+assert.deepEqual(validateProductMeta([{id:'shopee-1-2',name:'x',source:'listing'}], ['shopee-1-2'], knownListing), [{id:'shopee-1-2',name:'Real lamp',source:'listing'}])
+assert.equal(validateProductMeta([{id:'chair',name:'x',source:'listing'}], ['chair'], known), null, 'catalog ids have no listing photo')
+assert.equal(validateProductMeta([{id:'shopee-1-2',name:'x',source:'url'}], ['shopee-1-2'], knownListing), null, 'unknown source')
 assert.equal(validateProductMeta([{id:'unknown',name:'x'}], ['unknown'], known), null)
 assert.equal(validateProductMeta([{id:'chair',name:'x'}], ['other'], known), null)
 assert.equal(validateProductMeta([{id:'chair',name:'x',widthCm:0}], ['chair'], known), null)
@@ -158,7 +173,7 @@ assert.equal(validateProductMeta([], [], known), null)
 const refs = ['ANGLE1','ANGLE2','PLAN','PRODUCT1','PRODUCT2','PRODUCT3','PRODUCT4','PRODUCT5','PRODUCT6','STYLE']
 const complete = buildEditRequest({image:img,mime:'image/png',prompt:'p',env:{...fakeEnv,OPENAI_IMAGE_MODEL:'gpt-image-1.5'},references:refs.map((value,i)=>({image:Buffer.from(value),mime:'image/png',name:`ref-${i}.png`}))}).init.body as FormData
 assert.equal(complete.get('input_fidelity'),'high')
-assert.equal(complete.get('quality'),'medium')
+assert.equal(complete.get('quality'),MODEL_DEFAULTS.render.quality)
 assert.equal(complete.get('output_format'),'png')
 assert.deepEqual(await Promise.all((complete.getAll('image[]') as File[]).slice(1).map(f=>f.text())),refs)
 const productPrompt=buildPrompt({key:'minimal',th:'มินิมอล',prompt:'simple'},[{id:'chair',name:'Chair',x:0,y:0,w:0}],'input.jpg',['angle.jpg'],'style.jpg',[{id:'chair',file:'product-1.jpg',imageIndex:3,widthCm:60}],'openai')

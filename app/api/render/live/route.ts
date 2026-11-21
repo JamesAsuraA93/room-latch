@@ -3,11 +3,12 @@ import {readFileSync} from 'node:fs'
 import path from 'node:path'
 import {clientKey, gateRequest, INPUT_MAX_BYTES, sniffImage, type RenderImage, type StyleEntry} from '@/lib/live-render-core'
 import {MAX_RENDER_BODY_BYTES, validateProductMeta} from '@/lib/product-render'
-import {MAX_ROOM_REFERENCES, startJob, type ProductImage} from '@/lib/live-render'
+import {MAX_ROOM_REFERENCES, startJob} from '@/lib/live-render'
 import {validateRenderInput} from '@/lib/render'
 import {loadCatalog, loadRealCatalog} from '@/lib/catalog'
 import {EXACT_LISTINGS} from '@/lib/listings'
-import {listingTitles} from '@/lib/db'
+import {listingAssets} from '@/lib/db'
+import type {PipelineProduct} from '@/lib/render-pipeline'
 import {loadFurnitureCatalog} from '@/lib/furniture-catalog'
 import {validateFurnitureIds} from '@/lib/furniture'
 import {isListingImageUrl} from '@/lib/listing-image'
@@ -105,51 +106,56 @@ async function createJob(req: Request) {
 
   const mode = form.get('mode')
   if (mode !== null && mode !== 'selection') refuse(400, 'invalid_mode')
-  let products: ProductImage[] = []
+  let products: PipelineProduct[] = []
   let productNames: string[] = []
   if (mode === 'selection') {
     if (form.has('productImage') || form.has('productMeta')) refuse(400, 'unknown_field')
     // Resolve ids, names and image URLs from our own catalog; never fetch a client-provided URL.
     const catalog = await loadFurnitureCatalog()
-    const known = new Map(catalog.map(p => [p.id, p.name]))
+    const assets = new Map((await listingAssets(placed.map(p => p.id).filter(id => id.startsWith('shopee-'))).catch(() => [])).map(p => [p.id, p]))
+    const known = new Map([...catalog.map(p => [p.id, p.name] as const), ...[...assets.values()].map(p => [p.id, p.title] as const)])
     if (!validateFurnitureIds(placed.map(p => p.id), known)) refuse(400, 'invalid_product_references')
-    const selected = placed.map(item => catalog.find(p => p.id === item.id)!)
-    productNames = selected.map(p => p.name)
-    const photos = await Promise.all(selected.map(async product => {
-      if (!product.image || !isListingImageUrl(product.image)) return null
-      try {
-        const response = await fetch(product.image, {redirect: 'error', signal: AbortSignal.timeout(10000)})
-        if (!response.ok || !response.body) return null
-        const image = await readCapped(response.body, INPUT_MAX_BYTES)
-        const kind = image && sniffImage(new Uint8Array(image.subarray(0, 16)))
-        return image && kind ? {id: product.id, image, kind} : null
-      } catch { return null }
-    }))
-    products = photos.filter((p): p is NonNullable<typeof p> => p !== null)
+    productNames = placed.map(p => known.get(p.id)!)
+    products = placed.map(p => {
+      const asset = assets.get(p.id)
+      const item = catalog.find(candidate => candidate.id === p.id)
+      const listing = asset ? {imagePath: asset.imagePath, imageUrl: asset.imageUrl, dimensions: asset.dimensions}
+        : item?.image && isListingImageUrl(item.image) ? {imagePath: null, imageUrl: item.image, dimensions: null} : undefined
+      return {id: p.id, name: known.get(p.id)!, listing}
+    })
   } else {
     // SKU ids must be known catalog/fixture/exact-listing ids; names come from our data, never from the client
+    // Neon listings picked on the Result page; DB down = only the CSV snapshot ids are allowed and listing photos are unavailable
+    const listings = new Map((await listingAssets(placed.map(i => i.id).filter(id => id.startsWith('shopee-'))).catch(() => [])).map(l => [l.id, l]))
     const names = new Map<string, string>([
       ...loadCatalog().map(p => [p.id, p.name] as const),
       ...EXACT_LISTINGS.map(l => [l.id, l.title] as const),
       ...loadRealCatalog().map(p => [p.id, p.title] as const),
-      // Neon listings picked on the Result page; DB down = only the CSV snapshot ids are allowed
-      ...await listingTitles(placed.map(i => i.id).filter(id => id.startsWith('shopee-'))).catch(() => []),
+      ...[...listings.values()].map(l => [l.id, l.title] as const),
     ])
     const productMeta = validateProductMeta(jsonField(form, 'productMeta', 'null', 'bad_product_meta'), placed.map(i => i.id), names)
       ?? refuse(400, 'invalid_product_references')
     const productUploads = form.getAll('productImage')
-    if (productUploads.length !== productMeta.length) refuse(400, 'product_image_count_mismatch')
-    for (const [i, upload] of productUploads.entries()) products.push({...productMeta[i], ...await readImage(upload, PRODUCT_CODES)})
+    if (productUploads.length !== productMeta.filter(m => m.source === 'upload').length) refuse(400, 'product_image_count_mismatch')
     productNames = productMeta.map(p => p.name)
+    let nextUpload = 0
+    for (const {id, name, widthCm, source} of productMeta) {
+      if (source === 'upload') { products.push({id, name, widthCm, upload: await readImage(productUploads[nextUpload++], PRODUCT_CODES)}); continue }
+      const listing = listings.get(id)
+      if (!listing?.imagePath && !listing?.imageUrl) refuse(422, 'listing_photo_missing')
+      products.push({id, name, widthCm, listing: {imagePath: listing!.imagePath, imageUrl: listing!.imageUrl, dimensions: listing!.dimensions}})
+    }
   }
 
   const started = await startJob({
     provider: gate.provider, clientKey: clientKey(req.headers), style, styleReference, products, floorPlan, roomAreaM2: area.value,
     room: rooms[0], roomReferences: rooms.slice(1),
+    roomType: input.input.roomType, widthCm: mode === 'selection' ? undefined : input.input.width,
+    allowMissingProductPhotos: mode === 'selection',
     items: placed.map((item, i) => ({...item, name: productNames[i]})),
   })
   if (!started.ok) refuse(started.status, started.code)
-  return Response.json({job: started.job, live: true, productPhotoCount: products.length}, {status: 202, headers})
+  return Response.json({job: started.job, live: true, productPhotoCount: started.productPhotoCount ?? products.length}, {status: 202, headers})
 }
 
 export async function POST(req: Request) {

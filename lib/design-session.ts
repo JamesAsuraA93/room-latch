@@ -4,7 +4,7 @@ import {DESIGN_JOB_KEY, FURNITURE_SELECTION_KEY} from './storage-keys.ts'
 
 export type DesignSelection = {context: string; items: Furniture[]}
 export type DesignSession = {
-  job: Job; items: Furniture[]; plan: {style: string; roomType: string; budget: number; width: number; areaM2?: number | null}
+  job: Job; items: Furniture[]; plan: {style: string; roomType: string; budget: number; width: number; areaM2?: number | null; need?: string}
   before: string; photoCount: number
 }
 

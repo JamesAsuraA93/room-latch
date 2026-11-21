@@ -56,11 +56,13 @@ create table shopee_listings (
   source          text not null constraint shopee_listings_source_check check (source in ('snapshot', 'addition', 'exact_match', 'search')),
   shown_in_rooms  text[] not null default '{}',  -- exact matches shown on these room types
   checked_on      date not null,
-  -- source 'search' rows only (scripts/gather-shopee.mts); image_url links Shopee's CDN, no photo is stored
+  -- source 'search' rows only (scripts/gather-shopee.mts); image_url links Shopee's CDN
   image_url       text,
   price_thb       numeric(12, 2),
   shop_name       text,
   rating          real,
+  -- private bucket copy for the AI pipeline only (scripts/copy-listing-images.mts); never served to users
+  image_path      text constraint shopee_listings_image_path_check check (image_path ~ '^listings/[0-9]+-[0-9]+/original\.(jpg|png|webp)$'),
   unique (shop_id, item_id),
   check (id = 'shopee-' || shop_id || '-' || item_id)
 );
@@ -162,12 +164,19 @@ create table render_jobs (
   check ((status = 'running') = (finished_at is null))
 );
 
+-- Decision-model calls made by POST /api/recommend: back its daily limits. Purged after 24 hours.
+create table recommend_calls (
+  client_key text not null,                 -- hash of the caller's IP, never the raw address
+  at         timestamptz not null default now()
+);
+
 create index designs_feed_idx on designs (published_at desc) where published_at is not null;
 create index designs_owner_idx on designs (owner_id, updated_at desc);
 create index designs_remix_idx on designs (remix_of) where remix_of is not null;
 create index design_likes_user_idx on design_likes (user_id);
 create index design_saves_user_idx on design_saves (user_id, created_at desc);
 create index render_jobs_started_idx on render_jobs (started_at);
+create index recommend_calls_at_idx on recommend_calls (at);
 create index design_items_listing_idx on design_items (listing_id) where listing_id is not null;
 
 create index catalog_items_room_slot_idx on catalog_items (room_type, slot);

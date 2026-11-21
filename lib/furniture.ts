@@ -44,7 +44,7 @@ export function furnitureCatalog(real: RealProduct[], estimates: Product[]): Fur
   ]
 }
 
-export const selectionContext = (p: {style: string; roomType: string; budget: number}) => `${p.style}:${p.roomType}:${p.budget}`
+export const selectionContext = (p: {style: string; roomType: string; budget: number; need?: string; areaM2?: number | null}) => JSON.stringify({style: p.style, roomType: p.roomType, budget: p.budget, need: p.need?.trim() || '', areaM2: p.areaM2 ?? null})
 export const furnitureTotal = (items: Furniture[]) => ({
   total: items.reduce((sum, item) => sum + (item.price ?? 0), 0),
   unknown: items.filter(item => item.price === null).length,

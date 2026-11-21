@@ -12,6 +12,7 @@ import {NumberField} from '@/components/number-field'
 import {StyleReferenceInput} from '@/components/style-reference-input'
 import {FloorPlanInput} from '@/components/floor-plan-input'
 import {parseRoomArea} from '@/lib/floor-plan'
+import {MAX_NEED_CHARS} from '@/lib/recommend-core'
 import {MAX_ROOM_IMAGES, readRoomImages, saveRoomImages} from '@/lib/room-images'
 import {resizeRoomImage} from '@/lib/image'
 import {pickedFiles, pressProps, useFileDrop} from '@/lib/drop-zone'
@@ -32,6 +33,7 @@ export default function Upload() {
   const [referenceBusy, setReferenceBusy] = useState(false)
   const [floorPlanBusy, setFloorPlanBusy] = useState(false)
   const [area, setArea] = useState('')
+  const [need, setNeed] = useState('')
 
   useEffect(() => {
     setImages(readRoomImages())
@@ -39,6 +41,7 @@ export default function Upload() {
     setSample(!!plan.sample)
     setStyle(plan.style); setBudget(String(plan.budget)); setRoomType(plan.roomType)
     setArea(plan.areaM2 == null ? '' : String(plan.areaM2))
+    setNeed(plan.need ?? '')
   }, [])
 
   const keep = useCallback((next: string[], isSample: boolean) => {
@@ -78,7 +81,7 @@ export default function Upload() {
   const roomArea = parseRoomArea(area)
   function next() {
     if (!preview || !valid || !roomArea.ok || busy || referenceBusy || floorPlanBusy) return
-    if (!savePlan({style, budget: Number(budget), roomType, sample, areaM2: roomArea.value ?? null})) {
+    if (!savePlan({style, budget: Number(budget), roomType, sample, areaM2: roomArea.value ?? null, need: need.trim()})) {
       setError('บันทึกข้อมูลไม่ได้ กรุณาลองใหม่'); return
     }
     router.push('/products')
@@ -136,17 +139,20 @@ export default function Upload() {
             </button>)}
           </div>
         </div>
-        <div className="rounded-2xl border border-[#e6dfd7] bg-white p-5">
-          <NumberField label="งบสำหรับสินค้า (บาท)" value={budget} onChange={setBudget} presets={BUDGET_PRESETS} />
+        <div className="space-y-3 rounded-2xl border border-[#e6dfd7] bg-white p-4 sm:p-5">
+          <label htmlFor="room-need" className="block text-lg font-semibold">อยากเพิ่มอะไรเป็นพิเศษ? <span className="text-sm font-normal text-zinc-600">(ไม่บังคับ)</span></label>
+          <p id="room-need-help" className="text-sm leading-6 text-zinc-700">บอกการใช้งาน ของที่อยากได้ หรือของที่ไม่ต้องการ เพื่อช่วยเลือกสินค้า</p>
+          <textarea id="room-need" maxLength={MAX_NEED_CHARS} value={need} onChange={e => setNeed(e.target.value)} aria-describedby="room-need-help room-need-count" placeholder="เช่น อยากได้โซฟา 2 ที่นั่ง มุมอ่านหนังสือ และที่เก็บของ ไม่เอาพรม" className="min-h-32 w-full resize-y rounded-xl border border-zinc-300 bg-paper p-3 text-base leading-7 text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand" />
+          <p id="room-need-count" className="text-right text-sm text-zinc-600">{need.length}/{MAX_NEED_CHARS} ตัวอักษร</p>
         </div>
-        <details className="rl-disclosure">
-          <summary>ประเภทห้อง</summary>
-          <div className="space-y-5">
-            <fieldset><legend className="mb-3 text-sm font-semibold">ประเภทห้อง</legend>
+        <div className="rounded-2xl border border-[#e6dfd7] bg-white p-4 sm:p-5">
+            <fieldset><legend className="mb-3 text-base font-semibold">ประเภทห้อง</legend>
               <div className="flex flex-wrap gap-2">{ROOM_TYPES.map(type => <button key={type} type="button" aria-pressed={roomType === type} onClick={() => setRoomType(type)} className={`min-h-11 rounded-xl border px-4 text-sm ${roomType === type ? 'border-brand bg-brand text-white' : 'border-zinc-200'}`}>{roomName(type)}</button>)}</div>
             </fieldset>
-          </div>
-        </details>
+        </div>
+        <div className="rounded-2xl border border-[#e6dfd7] bg-white p-4 sm:p-5">
+          <NumberField label="งบสูงสุดสำหรับสินค้า (บาท)" value={budget} onChange={setBudget} presets={BUDGET_PRESETS} />
+        </div>
         <details className="rl-disclosure"><summary>เพิ่มภาพสไตล์ของคุณ (ไม่บังคับ)</summary><StyleReferenceInput onBusyChange={setReferenceBusy} /></details>
       </section>
     </div>

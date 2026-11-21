@@ -11,8 +11,9 @@ import type {Provider} from '@/lib/live-render-core'
 import {MAX_PRODUCT_IMAGES} from '@/lib/product-render'
 
 type Item = {id: string; x: number; y: number; w: number}
-type ProductPhotoOption = {id: string; name: string; image?: string; widthCm?: number}
-type AttachedProduct = ProductPhotoOption & {image: string}
+// listing = a Shopee listing whose photo the server already holds: it can be added without an upload
+type ProductPhotoOption = {id: string; name: string; image?: string; widthCm?: number; listing?: boolean}
+type AttachedProduct = ProductPhotoOption
 type Job = {id: string; status: 'running' | 'succeeded' | 'failed' | 'cancelled'; error?: string; output?: {width: number; height: number}}
 const ERRORS: Record<string, string> = {
   live_render_disabled: 'เซิร์ฟเวอร์นี้ยังไม่ได้เปิดการสร้างภาพด้วย AI',
@@ -25,6 +26,10 @@ const ERRORS: Record<string, string> = {
   rate_limited: 'วันนี้คุณสร้างภาพครบจำนวนที่กำหนดแล้ว กรุณาลองใหม่พรุ่งนี้',
   daily_cap_reached: 'วันนี้มีผู้ใช้สร้างภาพครบโควตาของระบบแล้ว กรุณาลองใหม่พรุ่งนี้',
   job_store_unavailable: 'ระบบสร้างภาพยังไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง',
+  listing_photo_missing: 'ยังไม่มีรูปประกาศของสินค้าบางชิ้นในระบบ กรุณาแนบรูปสินค้าเอง',
+  cutout_failed: 'แยกสินค้าออกจากรูปประกาศไม่สำเร็จ กรุณาแนบรูปที่เห็นสินค้าชัดกว่านี้',
+  size_failed: 'อ่านขนาดจริงของสินค้าไม่ได้ กรุณากรอกความกว้างของสินค้า',
+  placement_failed: 'จัดตำแหน่งสินค้าในห้องไม่สำเร็จ กรุณาลองใหม่',
   storage_failed: 'สร้างภาพแล้วแต่บันทึกไม่สำเร็จ กรุณาลองอีกครั้ง',
   body_too_large: 'รูปทั้งหมดมีขนาดใหญ่เกินไป กรุณาลดขนาดรูป',
   timeout: 'ใช้เวลานานเกินกำหนด กรุณาลองใหม่',
@@ -59,7 +64,7 @@ export function LiveRenderPanel({ready = true, roomImage, roomImages = [], produ
     setStyleReference(readStyleReference())
     try {
       const saved = JSON.parse(sessionStorage.getItem(PRODUCT_RENDER_KEY) || '[]')
-      if (Array.isArray(saved)) setAttached(saved.filter((p): p is AttachedProduct => !!p && typeof p.id === 'string' && typeof p.name === 'string' && typeof p.image === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(p.image)).slice(0, MAX_PRODUCT_IMAGES))
+      if (Array.isArray(saved)) setAttached(saved.filter((p): p is AttachedProduct => !!p && typeof p.id === 'string' && typeof p.name === 'string' && (typeof p.image === 'string' ? /^data:image\/(jpeg|png|webp);base64,/.test(p.image) : p.listing === true && p.id.startsWith('shopee-'))).slice(0, MAX_PRODUCT_IMAGES))
     } catch {}
     return () => { mounted.current = false; if (poll.current) clearTimeout(poll.current) }
   }, [])
@@ -129,9 +134,9 @@ export function LiveRenderPanel({ready = true, roomImage, roomImages = [], produ
         if (!['image/jpeg','image/png','image/webp'].includes(blob.type)) throw new Error('รูปห้องต้องเป็น JPG, PNG หรือ WebP')
         form.append('image', blob, 'room')
       }
-      for (const product of attached) form.append('productImage', await (await fetch(product.image)).blob(), `${product.id}.jpg`)
+      for (const product of attached) if (product.image) form.append('productImage', await (await fetch(product.image)).blob(), `${product.id}.jpg`)
       if (styleReference) form.append('styleReference', await (await fetch(styleReference)).blob(), 'style-reference.jpg')
-      form.append('productMeta', JSON.stringify(attached.map(({id,name,widthCm}) => ({id,name,widthCm}))))
+      form.append('productMeta', JSON.stringify(attached.map(({id,name,widthCm,image}) => ({id,name,widthCm,source: image ? 'upload' : 'listing'}))))
       form.append('meta', JSON.stringify({...meta, items: attached.map(p => meta.items.find(i => i.id === p.id) || {id:p.id,x:0,y:0,w:0})}))
       form.append('consent', 'yes')
       const r = await fetch('/api/render/live', {method:'POST', body:form})
@@ -208,7 +213,9 @@ export function LiveRenderPanel({ready = true, roomImage, roomImages = [], produ
         {attached.map((p, i) => (
           <div key={p.id} className="flex gap-3 rounded-2xl border border-[#ece6df] p-3">
             <button type="button" disabled={locked} aria-label={`เปลี่ยนรูป ${p.name}`} onClick={() => pick(p)} className="shrink-0 rounded-xl focus-visible:outline-2 focus-visible:outline-brand">
-              <img src={p.image} alt={p.name} className="size-20 rounded-xl bg-paper object-contain" />
+              {p.image
+                ? <img src={p.image} alt={p.name} className="size-20 rounded-xl bg-paper object-contain" />
+                : <span className="flex size-20 items-center justify-center rounded-xl bg-paper p-2 text-center text-[10px] leading-4 text-zinc-500">ใช้รูปจากประกาศ</span>}
             </button>
             <div className="min-w-0 flex-1">
               <label className="block text-xs text-zinc-500" htmlFor={`product-name-${i}`}>สินค้า {i + 1}</label>
@@ -231,11 +238,11 @@ export function LiveRenderPanel({ready = true, roomImage, roomImages = [], produ
 
       {products.length > 0 && (
         <details className="rounded-2xl bg-paper p-3">
-          <summary className="text-xs font-semibold">เพิ่มรูปให้สินค้าจากชุดแนะนำ</summary>
+          <summary className="text-xs font-semibold">เพิ่มสินค้าจากชุดแนะนำและสินค้าที่เลือก</summary>
           <div className="mt-3 space-y-2">
             {products.filter(p => !attached.some(a => a.id === p.id)).map(p => (
               <button key={p.id} type="button" disabled={locked || full}
-                onClick={() => { if (p.image) update([...attached, {...p, image: p.image}]); else pick(p) }}
+                onClick={() => { if (p.image || p.listing) update([...attached, p]); else pick(p) }}
                 className="flex min-h-10 w-full items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-left text-xs disabled:opacity-40">
                 <span>{p.name.replace(' (fixture)', '')}</span>
                 <Plus className="size-4 shrink-0 text-brand" />
@@ -247,7 +254,7 @@ export function LiveRenderPanel({ready = true, roomImage, roomImages = [], produ
       {!ready && <p role="status" className="rounded-2xl bg-amber-50 p-3 text-xs leading-6 text-amber-900">เตรียมรูปไว้ได้เลย · เซิร์ฟเวอร์นี้ยังไม่ได้เปิดการสร้างภาพด้วย AI</p>}
       <label className="flex items-start gap-2 text-xs leading-6 text-zinc-600">
         <input type="checkbox" checked={consent} disabled={locked} onChange={e => setConsent(e.target.checked)} className="mt-1.5 size-4 shrink-0 accent-[var(--color-brand)]" />
-        <span>ยินยอมส่งรูปห้อง {roomImages.length || 1} รูป + รูปสินค้า {attached.length} รูป{styleReference ? ' + ภาพสไตล์ 1 รูป' : ''} ให้ OpenAI เพื่อสร้างภาพ มีค่าใช้จ่ายตามการใช้งาน API</span>
+        <span>ยินยอมส่งรูปห้อง {roomImages.length || 1} รูป + รูปสินค้าที่แนบ {attached.filter(p => p.image).length} รูป{styleReference ? ' + ภาพสไตล์ 1 รูป' : ''} ให้ OpenAI เพื่อสร้างภาพ มีค่าใช้จ่ายตามการใช้งาน API</span>
       </label>
       <Button className="w-full" onClick={() => void generate()}
         disabled={!ready || !consent || !attached.length || locked || attached.some(p => !p.name.trim() || (p.widthCm !== undefined && (!Number.isFinite(p.widthCm) || p.widthCm <= 0 || p.widthCm > 1000)))}>
