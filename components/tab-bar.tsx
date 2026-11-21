@@ -28,14 +28,14 @@ export function TabBar() {
   }, [path])
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[480px] border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-6px_20px_rgba(46,38,34,0.06)] backdrop-blur">
+    <nav className="rl-tabbar">
       <ul className="grid grid-cols-4">
         {TABS.map(({href, label, icon: Icon, match}) => {
           const active = match.some(m => path === m || path.startsWith(`${m}/`))
           return (
             <li key={label}>
               <Link href={match === DESIGN ? designHref : href} aria-current={active ? 'page' : undefined}
-                className={`mx-1.5 my-1.5 flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl text-[11px] transition-colors motion-reduce:transition-none ${active ? 'bg-brand-soft font-bold text-brand' : 'font-medium text-zinc-500'}`}>
+                className={`mx-1.5 my-1.5 flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl text-[11px] transition-colors motion-reduce:transition-none ${active ? 'bg-brand-soft font-bold text-brand-dark' : 'font-medium text-zinc-500'}`}>
                 <Icon className="size-5" strokeWidth={active ? 2.4 : 1.8} />
                 {label}
               </Link>

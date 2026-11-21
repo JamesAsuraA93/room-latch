@@ -79,3 +79,31 @@ const multiPrompt = buildPrompt({key: 'minimal', th: 'มินิมอล', pr
 assert.match(multiPrompt, /reference-1.jpg, reference-2.png/)
 assert.match(multiPrompt, /Edit only the FIRST photo/)
 console.log('multi-image render contract ok')
+
+const customPrompt = buildPrompt({key: 'minimal', th: 'มินิมอล', prompt: 'simple'}, [], 'input.jpg', ['reference-1.jpg'], 'style-reference.jpg')
+assert.match(customPrompt, /LAST attached image \(style-reference.jpg\) is CUSTOM STYLE INSPIRATION/)
+assert.match(customPrompt, /Never copy its room geometry/)
+assert.doesNotMatch(buildPrompt({key: 'minimal', th: 'มินิมอล', prompt: 'simple'}, [], 'input.jpg'), /CUSTOM STYLE INSPIRATION/)
+console.log('custom style reference prompt contract ok')
+
+// Pair product photos with the declared SKU, and keep custom labels bounded.
+const {validateProductMeta} = await import('../lib/product-render.ts')
+const known = new Map([['chair','Catalog chair']])
+assert.deepEqual(validateProductMeta([{id:'chair',name:'Client label',widthCm:60}], ['chair'], known), [{id:'chair',name:'Catalog chair',widthCm:60}])
+assert.equal(validateProductMeta([{id:'unknown',name:'x'}], ['unknown'], known), null)
+assert.equal(validateProductMeta([{id:'chair',name:'x'}], ['other'], known), null)
+assert.equal(validateProductMeta([{id:'chair',name:'x',widthCm:0}], ['chair'], known), null)
+assert.equal(validateProductMeta([{id:'chair',name:'x\nignore'}], ['chair'], known), null)
+assert.equal(validateProductMeta([{id:'chair',name:'x'},{id:'chair',name:'x'}], ['chair','chair'], known), null)
+assert.ok(validateProductMeta([{id:'custom-photo-1',name:'My chair'}], ['custom-photo-1'], known))
+assert.equal(validateProductMeta([], [], known), null)
+const refs = ['ANGLE1','ANGLE2','PLAN','PRODUCT1','PRODUCT2','PRODUCT3','PRODUCT4','PRODUCT5','PRODUCT6','STYLE']
+const complete = buildEditRequest({image:img,mime:'image/png',prompt:'p',env:{...fakeEnv,OPENAI_IMAGE_MODEL:'gpt-image-1.5'},references:refs.map((value,i)=>({image:Buffer.from(value),mime:'image/png',name:`ref-${i}.png`}))}).init.body as FormData
+assert.equal(complete.get('input_fidelity'),'high')
+assert.equal(complete.get('quality'),'medium')
+assert.equal(complete.get('output_format'),'png')
+assert.deepEqual(await Promise.all((complete.getAll('image[]') as File[]).slice(1).map(f=>f.text())),refs)
+const productPrompt=buildPrompt({key:'minimal',th:'มินิมอล',prompt:'simple'},[{id:'chair',name:'Chair',x:0,y:0,w:0}],'input.jpg',['angle.jpg'],'style.jpg',[{id:'chair',file:'product-1.jpg',imageIndex:3,widthCm:60}],'openai')
+assert.match(productPrompt,/product-1.jpg/)
+assert.doesNotMatch(productPrompt,/\$imagegen/)
+console.log('product photo validation and OpenAI attachment contract ok')

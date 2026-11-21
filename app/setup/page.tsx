@@ -19,7 +19,7 @@ export default function Setup() {
   }, [])
   const valid = Number(budget) > 0 && Number(width) > 0
   return (
-    <div className="flex min-h-[calc(100dvh-9rem-env(safe-area-inset-bottom))] flex-col gap-5">
+    <div className="flex min-h-[calc(100dvh-19rem-env(safe-area-inset-bottom))] flex-col gap-5">
       <RemixBanner />
       <PageHeader title={t.setup}>{t.setupHint}</PageHeader>
       <fieldset className="space-y-2">
@@ -33,8 +33,8 @@ export default function Setup() {
           ))}
         </div>
       </fieldset>
-      <NumberField label={t.budget} value={budget} onChange={setBudget} presets={[3500, 5000, 10000]} />
-      <NumberField label={t.width} hint={t.widthHint} value={width} onChange={setWidth} presets={[60, 80, 120]} />
+      <div className="grid gap-5 md:grid-cols-2"><div className="rounded-[26px] bg-white p-6"><NumberField label={t.budget} value={budget} onChange={setBudget} presets={[3500, 5000, 10000]} /></div><div className="rounded-[26px] bg-white p-6">
+      <NumberField label={t.width} hint={t.widthHint} value={width} onChange={setWidth} presets={[60, 80, 120]} /></div></div>
       {!valid && <p role="alert" className="text-sm text-red-700">{t.invalidNumber}</p>}
       <ActionBar>
         <Button disabled={!valid} className="w-full" onClick={() => { savePlan({roomType, budget: Number(budget), width: Number(width)}); writePlacement({...readPlacement(), set: undefined}); router.push('/loading') }}>{t.seeSet}</Button>

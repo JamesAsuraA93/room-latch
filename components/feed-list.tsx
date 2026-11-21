@@ -49,7 +49,7 @@ export function FeedList({limit, tabs = false}: {limit?: number; tabs?: boolean}
         </div>
       ))}
       {posts.length === 0 && status !== 'loading' && <p className="py-10 text-center text-sm text-zinc-500">{t.noSaved}</p>}
-      {posts.map(post => (
+      <div className="grid items-start gap-5 md:grid-cols-2">{posts.map(post => (
         <FeedCard key={post.id} post={post}
           liked={social.likes.includes(post.id)} saved={social.saves.includes(post.id)}
           onLike={() => update({...social, likes: toggle(social.likes, post.id)})}
@@ -57,7 +57,7 @@ export function FeedList({limit, tabs = false}: {limit?: number; tabs?: boolean}
           onRemix={() => remix(post)}
           onRemove={post.local ? () => update({...social, posts: social.posts.filter(p => p.id !== post.id), saves: social.saves.filter(id => id !== post.id), likes: social.likes.filter(id => id !== post.id)}) : undefined}
         />
-      ))}
+      ))}</div>
     </div>
   )
 }

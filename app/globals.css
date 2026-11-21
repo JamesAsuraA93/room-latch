@@ -1,24 +1,39 @@
 @import 'tailwindcss';
 
-/* CI ของ RoomLatch ตามไอคอน clay อ่อนที่อนุมัติ (สีพื้นนอกไอคอน median #C6775A)
-   brand = deep clay: ปุ่มหลัก (ตัวอักษรขาว ~6.5:1) และตัวอักษร active/ลิงก์บนพื้นครีม (~5.9:1)
-   brand-dark = กดปุ่ม/hover, brand-soft = wash พื้นที่ถูกเลือก, accent = clay ของไอคอน ใช้ตกแต่ง/ไฮไลต์เท่านั้น ไม่ใช้กับตัวอักษร */
+/* Warm taupe, soft ivory surfaces, and apricot accents. */
 @theme {
-  --color-brand: #98452F;
-  --color-brand-dark: #7E3725;
-  --color-brand-soft: #F5E1D7;
-  --color-accent: #C6775A;
-  --color-ink: #2E2622;
-  --color-paper: #FAF7F2;
-  --color-white: #FFFFFF;
-  /* deep sage ใช้กับ Remix และ Saved เท่านั้น */
-  --color-sage: #52624E;
+  --font-sans: 'IBM Plex Sans Thai', Arial, sans-serif;
+  --color-brand: #806149;
+  --color-brand-dark: #644934;
+  --color-brand-soft: #efe5da;
+  --color-accent: #ffbf79;
+  --color-ink: #3c3935;
+  --color-paper: #f5f4f1;
+  --color-white: #ffffff;
+  --color-sage: #596d60;
 }
-
 :root { color-scheme: light; }
-body { background: var(--color-paper); color: var(--color-ink); font-family: Arial, 'Noto Sans Thai', sans-serif; }
+body { margin: 0; background: #eae3db; color: var(--color-ink); font-family: 'IBM Plex Sans Thai', Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 button { cursor: pointer; }
-
+button:disabled { cursor: default; }
+summary { cursor: pointer; }
+.rl-shell { max-width: 1080px; min-height: 100dvh; margin: auto; background: #b1947b; }
+.rl-appbar { padding: calc(22px + env(safe-area-inset-top)) 24px 28px; color: white; }
+.rl-surface { position: relative; border-radius: 34px 34px 0 0; background: var(--color-paper); padding: 28px 22px calc(110px + env(safe-area-inset-bottom)); min-height: calc(100dvh - 140px); }
+.rl-tabbar { position: fixed; z-index: 30; bottom: max(12px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 460px; border: 1px solid #eee8e2; background: #fffffff2; border-radius: 26px; box-shadow: 0 10px 40px #5c463323; backdrop-filter: blur(16px); }
+.rl-section-label { font-size: 11px; letter-spacing: .16em; color: #84796e; font-weight: 700; }
+.rl-disclosure { border-radius: 24px; background: white; border: 1px solid #ebe6df; padding: 18px 20px; }
+.rl-disclosure > summary { font-size: 14px; font-weight: 600; padding: 3px 0; }
+.rl-disclosure[open] > summary { margin-bottom: 18px; }
+.rl-photo { background: #e7dfd5; }
+.rl-room-choice { transition: border-color 150ms, box-shadow 150ms; }
+.rl-room-choice:hover { box-shadow: 0 8px 24px #74583e12; }
+@media (min-width: 768px) {
+  body { padding: 30px 24px; }
+  .rl-shell { min-height: calc(100dvh - 60px); border-radius: 34px; box-shadow: 0 24px 80px #6c513e22; }
+  .rl-appbar { padding: 26px 40px 30px; }
+  .rl-surface { padding: 34px 40px 112px; border-radius: 34px; min-height: calc(100dvh - 210px); }
+}
 /* ปุ่ม "ดูของที่เพิ่ม": ขอบหนาสว่างค่อยๆ วิบช้าๆ 3 รอบ ไม่กระพริบเร็ว */
 .rl-highlight { outline: 4px solid #FFFFFF; outline-offset: 2px; box-shadow: 0 0 0 7px color-mix(in srgb, var(--color-accent) 90%, transparent); animation: rl-glow 1.4s ease-in-out 3; }
 @keyframes rl-glow { 0%, 100% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--color-accent) 90%, transparent); } 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--color-accent) 25%, transparent); } }

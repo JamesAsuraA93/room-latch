@@ -41,3 +41,18 @@ npm run start -- -H 127.0.0.1 -p 3123   # http://127.0.0.1:3123 (เฉพาะ
 - ประกาศจริง 1 ชิ้น (`lib/listings.ts`): โคมไฟหนีบ LED USB ยืนยันแค่รูปประกาศ (เก็บไว้ที่ `public/listings/`) กับลิงก์ประกาศ ราคา ขนาด ตัวเลือก สต็อก ยังไม่ยืนยัน จึงไม่นับในงบ/ความกว้าง รายละเอียดใน `catalog/shopee-listings.json`
 - รูปตัวอย่าง/ฟีดโหลดจาก Unsplash ต้องมีเน็ต
 # room-latch
+
+### Local product photo rendering
+
+Set these server-only values in the root `.env.local` (never use a `NEXT_PUBLIC_` key):
+
+```dotenv
+ROOMLATCH_RENDER_PROVIDER=openai
+ROOMLATCH_OPENAI_RENDER=1
+ROOMLATCH_CODEX_RENDER=0
+OPENAI_API_KEY=
+OPENAI_IMAGE_MODEL=gpt-image-1.5
+OPENAI_IMAGE_QUALITY=medium
+```
+
+Paste your key after `OPENAI_API_KEY=`, restart `npm run dev -- --port 3123`, and open `/result`. Add up to six product photos by dropping, pasting, or selecting files. Confirm the image submission checkbox and generate. The server sends the primary room, up to three additional room views/plans, product photos, and optional style image to OpenAI Images Edits. Only photo-backed products are included. View the result with Before/After or download it. This is an AI visualization, not a 3D model or guaranteed measurement. API usage is billed to your key. The endpoint remains local-only and disabled on Vercel.

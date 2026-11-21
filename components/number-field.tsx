@@ -9,7 +9,7 @@ export function NumberField({label, hint, value, onChange, presets}: {label: str
       <label htmlFor={id} className="block text-sm font-semibold">{label}</label>
       {hint && <p className="text-xs text-zinc-500">{hint}</p>}
       <input id={id} inputMode="numeric" pattern="[0-9]*" value={value} onChange={e => onChange(e.target.value.replace(/\D/g, ''))}
-        className="min-h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-lg font-semibold outline-none focus:border-brand" />
+        className="min-h-12 w-full rounded-2xl border border-zinc-200 bg-paper px-4 text-2xl font-semibold outline-none focus:border-brand" />
       <div className="flex gap-2">
         {presets.map(n => (
           <button key={n} type="button" onClick={() => onChange(String(n))}

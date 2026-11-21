@@ -50,7 +50,7 @@ export const savePlan = (p: Partial<Plan>) => writeJson('session', PLAN_KEY, {..
 export function startDemoSession() {
   writeJson('session', PLAN_KEY, {...DEFAULT_PLAN, sample: true})
   writeJson('session', PLACEMENT_KEY, {pos: {}, photos: {}, locked: []})
-  try { sessionStorage.removeItem(RENDER_KEY); sessionStorage.removeItem('room-ai-photos') } catch {}
+  try { sessionStorage.removeItem(RENDER_KEY); sessionStorage.removeItem('room-ai-photos'); sessionStorage.removeItem('room-ai-style-reference'); sessionStorage.removeItem('room-ai-product-render') } catch {}
   try { sessionStorage.setItem(ROOM_IMAGE_KEY, BEFORE) } catch {}
 }
 
