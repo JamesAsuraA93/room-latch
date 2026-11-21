@@ -58,7 +58,7 @@ assert.equal(isShopeeImageUrl('https://down-th.img.susercontent.com:8443/file/x'
 assert.match(place, /240 cm wide/); assert.match(place, /100 W × 50 D × 80 H cm \(typical, low confidence\)/); assert.match(place, /around x=40% y=60%/)
 assert.match(place, /Images 2 to 2 show other angles/); assert.match(place, /Group products that are used together/); assert.doesNotMatch(place, /\nIgnore previous/)
 const final = placedRenderPrompt({styleTh: 'เจแปนดิ', stylePrompt: 'ไม้โทนกลาง', products: [{id: 'a', name: 'Sofa', size: read}, {id: 'b', name: 'Lamp', size: read}], styleReference: true})
-assert.match(final, /exactly these 2 product\(s\)/); assert.match(final, /Do not move, enlarge, shrink/); assert.match(final, /Images 2 to 3 are the same products/); assert.match(final, /style inspiration only/)
+assert.match(final, /exactly these 2 product\(s\)/); assert.match(final, /Do not relocate a product/); assert.match(final, /placement guides/); assert.match(final, /hangs on the window it covers/); assert.match(place, /covers a window/); assert.match(final, /Images 2 to 3 are the same products/); assert.match(final, /style inspiration only/)
 assert.match(roomCleanupPrompt(), /BEFORE any furniture placement/)
 assert.match(roomCleanupPrompt(), /ALL living beings/)
 assert.match(roomCleanupPrompt(), /reflections.*shadows/)

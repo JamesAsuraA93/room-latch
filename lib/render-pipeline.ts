@@ -7,7 +7,7 @@
 //   3. size     vision model reads the real size in cm                      cached at listings/<shop>-<item>/spec.json
 //   4. place    vision model decides where each product stands and how big it appears in the room photo
 //   5. paste    sharp pastes every cutout at that spot and size
-//   6. render   image model makes the pasted products sit naturally; position, size and look stay fixed
+//   6. render   image model redraws each pasted product in the room's perspective and light; spot, real size and design stay fixed
 // Prompts, validation and size math live in lib/render-pipeline-core.ts (pure, tested).
 import 'server-only'
 import sharp from 'sharp'
