@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import {MAX_PICKS, parsePicks, recommendPrompt, rulesPick, totalOf, withinBudget, type Candidate} from '../lib/recommend-core.ts'
 
-const c = (id: string, category: string, price: number, rating: number | null = 5): Candidate => ({id, title: `title ${id}`, category, price, rating})
+const c = (id: string, category: string, price: number, rating: number | null = 5): Candidate => ({id, title: `title ${id}`, category, price, rating, image: null})
 const pool = [c('s1', 'seating', 1500), c('s2', 'seating', 600, 4.5), c('t1', 'table', 900), c('l1', 'light', 700), c('l2', 'light', 300, 4.9), c('x1', 'textile', 400), c('a1', 'accent', 150)]
 
 // the model chooses ids only: unknown and repeated ids are dropped, prices come from our data

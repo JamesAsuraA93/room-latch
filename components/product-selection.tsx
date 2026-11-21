@@ -52,7 +52,7 @@ export function ProductSelection({catalog, provider}: {catalog: Furniture[]; pro
         if (cancelled) return
         const next: Furniture[] = result.items.slice(0, MAX_FURNITURE).map(item => ({
           id: item.id, name: item.title, category: furnitureCategory(item.title, item.category), styles: [p.style],
-          price: item.price, priceKind: 'listed', image: catalog.find(candidate => candidate.id === item.id)?.image ?? null, url: item.url || '',
+          price: item.price, priceKind: 'listed', image: item.image ?? catalog.find(candidate => candidate.id === item.id)?.image ?? null, url: item.url || '',
         }))
         setItems(next)
         if (!saveSelection({context, items: next})) setError('บันทึกตัวเลือกไม่ได้ กรุณาตรวจพื้นที่เบราว์เซอร์')

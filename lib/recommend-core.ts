@@ -5,7 +5,7 @@
 export const MAX_PICKS = 6 // = MAX_PRODUCT_IMAGES: everything picked can go into one render
 export const MAX_NEED_CHARS = 300
 
-export type Candidate = {id: string; title: string; category: string; price: number; rating: number | null}
+export type Candidate = {id: string; title: string; category: string; price: number; rating: number | null; image: string | null}
 export type Pick = Candidate & {reason: string}
 export type Recommendation = {source: 'ai' | 'rules'; items: Pick[]; total: number; budget: number; summary: string}
 export type RecommendInput = {style: string; styleTh: string; roomType: string; roomTh: string; budget: number; widthCm?: number; need: string}
