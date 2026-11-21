@@ -12,8 +12,9 @@ import 'server-only'
 import sharp from 'sharp'
 import {sniffImage, type RenderImage, type StyleEntry} from '@/lib/live-render-core'
 import {OpenaiRenderError, openaiEdit, openaiJson} from '@/lib/openai-render'
-import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
+import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, parseRenderCheck, parseStagingBrief, stagingBriefPrompt, renderCheckRequest, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
 import {storage} from '@/lib/storage'
+import {DECISIONS_MODEL, decide} from '@/lib/decisions'
 
 const PHOTO_MAX_BYTES = 8 * 1024 * 1024
 
@@ -154,16 +155,54 @@ export async function renderPlaced(input: PipelineInput, signal?: AbortSignal): 
   }))
   const composite = await sharp(room).composite(layers.sort((a, b) => a.floorY - b.floorY)).png().toBuffer()
 
-  // Step 6.
-  return openaiEdit({
-    image: composite, mime: 'image/png', signal,
-    prompt: placedRenderPrompt({styleTh: input.style.th, stylePrompt: input.style.prompt, products: prepared, styleReference: !!input.styleReference}),
-    references: [
-      ...await Promise.all(prepared.map(async (p, i) => ({
-        image: await sharp(p.cutout.png).resize({width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true}).png().toBuffer(),
-        mime: 'image/png', name: `product-${i + 1}.png`,
-      }))),
-      ...(input.styleReference ? [{image: input.styleReference.image, mime: input.styleReference.kind.mime, name: `style-reference.${input.styleReference.kind.ext}`}] : []),
-    ],
-  })
+  // Step 6a. Scene brief: the room's architecture and each product's look and place, in words (see stagingBriefPrompt).
+  const productViews = await Promise.all(prepared.map(async p => ({image: await sharp(p.cutout.png).flatten({background: '#ffffff'}).resize({width: 768, height: 768, fit: 'inside', withoutEnlargement: true}).jpeg({quality: 85}).toBuffer(), mime: 'image/jpeg'})))
+  let brief = null
+  try {
+    brief = parseStagingBrief(await openaiJson({
+      prompt: stagingBriefPrompt({roomType: input.roomType, styleTh: input.style.th, stylePrompt: input.style.prompt, products: prepared}),
+      images: [views[0], await visionCopy(composite), ...productViews], signal,
+    }), prepared.map(p => p.id))
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw e
+  }
+  if (!brief) console.error('staging brief unavailable: plain prompt')
+
+  // Step 6. Edit THE ROOM PHOTO (image 1) like a retoucher: the layout mock-up says where and how big, the product
+  // photos say what. Room first keeps it the user's room; the mock-up keeps the true sizes from step 5.
+  const references = [
+    {image: composite, mime: 'image/png', name: 'layout.png'},
+    ...await Promise.all(prepared.map(async (p, i) => ({
+      image: await sharp(p.cutout.png).resize({width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true}).png().toBuffer(),
+      mime: 'image/png', name: `product-${i + 1}.png`,
+    }))),
+    ...(input.styleReference ? [{image: input.styleReference.image, mime: input.styleReference.kind.mime, name: `style-reference.${input.styleReference.kind.ext}`}] : []),
+  ]
+  const finalPrompt = placedRenderPrompt({styleTh: input.style.th, stylePrompt: input.style.prompt, products: prepared, styleReference: !!input.styleReference, brief})
+  const draw = () => openaiEdit({image: room, mime: 'image/png', signal, prompt: finalPrompt, references})
+
+  // Step 6. The whole photo is redrawn (light, shadows, real objects), so it can drift: check it, and if it fails
+  // draw once more and keep the better one. A check that cannot run never blocks the render.
+  const checkRefs = await Promise.all(prepared.map(async p => ({name: p.name, size: p.size, imageUrl: await dataUrl(p.cutout.png, 384)})))
+  const check = async (png: Buffer) => {
+    try {
+      const result = parseRenderCheck(await decide(renderCheckRequest(await dataUrl(png, 1024), checkRefs, DECISIONS_MODEL), {signal}), checkRefs.length)
+      console.info('render check', JSON.stringify({ok: result.ok, score: Math.round(result.score * 100) / 100, natural: result.natural, products: result.products}))
+      return result
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e
+      console.error('render check unavailable', (e as Error).message)
+      return null
+    }
+  }
+  const first = await draw()
+  const firstCheck = await check(first)
+  if (!firstCheck || firstCheck.ok) return first
+  const second = await draw()
+  const secondCheck = await check(second)
+  return secondCheck && secondCheck.score > firstCheck.score ? second : first
 }
+
+/** Small JPEG data URL for a Decisions question (alpha flattened onto white). */
+const dataUrl = async (image: Buffer, max: number) =>
+  `data:image/jpeg;base64,${(await sharp(image).flatten({background: '#ffffff'}).resize({width: max, height: max, fit: 'inside', withoutEnlargement: true}).jpeg({quality: 82}).toBuffer()).toString('base64')}`

@@ -1,6 +1,6 @@
 // node scripts/render-pipeline.test.mts — the pure parts of the accurate render pipeline. No network, no images.
 import assert from 'node:assert/strict'
-import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, sizePrompt, withUserWidth, type ProductSize} from '../lib/render-pipeline-core.ts'
+import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, parseRenderCheck, parseStagingBrief, renderCheckRequest, stagingBriefPrompt, CHECK_PASS, sizePrompt, withUserWidth, type ProductSize} from '../lib/render-pipeline-core.ts'
 
 // storage keys only for real listing ids: nothing from the request can reach another path
 // the cutout key carries the prompt version: a cutout made by an older prompt (a rug cut out as its chair) is never reused
@@ -101,6 +101,37 @@ assert.equal(isShopeeImageUrl('https://user:pass@down-th.img.susercontent.com/fi
 assert.equal(isShopeeImageUrl('https://down-th.img.susercontent.com:8443/file/x'), false)
 assert.match(place, /240 cm wide/); assert.match(place, /100 W × 50 D × 80 H cm \(typical, low confidence\)/); assert.match(place, /around x=40% y=60%/)
 assert.match(place, /Images 2 to 2 show other angles/); assert.match(place, /Group products that are used together/); assert.doesNotMatch(place, /\nIgnore previous/)
-const final = placedRenderPrompt({styleTh: 'เจแปนดิ', stylePrompt: 'ไม้โทนกลาง', products: [{id: 'a', name: 'Sofa', size: read}, {id: 'b', name: 'Lamp', size: read}], styleReference: true})
-assert.match(final, /exactly these 2 product\(s\)/); assert.match(final, /Do not move, enlarge, shrink/); assert.match(final, /Images 2 to 3 are the same products/); assert.match(final, /style inspiration only/)
+const two = [{id: 'a', name: 'Sofa', size: read}, {id: 'b', name: 'Lamp', size: read}]
+const brief = parseStagingBrief({room: 'Wooden door far left, black two-panel window centre.', mood: 'a warm Japandi lounge',
+  products: [{id: 'b', look: 'white glass cube on a walnut base', place: 'On the shelf by the right wall.'}, {id: 'a', look: 'oatmeal fabric, oak legs', place: 'Along the left wall.'}], accents: ['a potted plant near the window', 'a print', 'a third one']}, ['a', 'b'])!
+assert.deepEqual(brief.products.map(p => p.id), ['a', 'b'], 'request order'); assert.equal(brief.accents.length, 2, 'at most 2 accents')
+assert.equal(parseStagingBrief({room: 'x', products: [{id: 'a', look: 'l', place: 'p'}]}, ['a', 'b']), null, 'a product missing')
+assert.equal(parseStagingBrief({room: '', products: []}, []), null, 'no room description')
+const final = placedRenderPrompt({styleTh: 'เจแปนดิ', stylePrompt: 'ไม้โทนกลาง', products: two, styleReference: true, brief})
+assert.match(final, /^Edit image 1, the source room photo/); assert.match(final, /Image 2 is a layout mock-up/); assert.match(final, /\(Wooden door far left/)
+assert.match(final, /Image 3: product reference \("Sofa"\)/); assert.match(final, /Image 4: product reference \("Lamp"\)/); assert.match(final, /Image 5: style inspiration only/)
+assert.match(final, /- Image 3 \([^)]*\): Along the left wall\. It looks like this: oatmeal fabric/); assert.match(final, /staged as a warm Japandi lounge/)
+assert.match(final, /Finish with a potted plant near the window and a print\. Nothing else/); assert.match(final, /contact shadows/); assert.match(final, /door is about 205 cm/)
+const plain = placedRenderPrompt({styleTh: 'เจแปนดิ', stylePrompt: 'ไม้โทนกลาง', products: two, styleReference: false, brief: null})
+assert.match(stagingBriefPrompt({roomType: 'living', styleTh: 'เจแปนดิ', stylePrompt: 'x', products: [{id: 'a', name: injected, size: read}]}), /never instructions/)
+
+// render check: one natural score + present/likeness/size per product, judged against each product's own photo
+const req = renderCheckRequest('data:image/jpeg;base64,AAA', [{name: 'Sofa', size: read, imageUrl: 'data:image/jpeg;base64,S'}, {name: injected, size: read, imageUrl: 'data:image/jpeg;base64,L'}], 'm')
+assert.deepEqual(req.questions.map(q => q.name), ['natural', 'present_0', 'like_0', 'size_0', 'present_1', 'like_1', 'size_1'])
+assert.doesNotMatch(JSON.stringify(req), /\\nIgnore previous/)
+const answers = (natural: number, per: [number, number, number][]) => ({answers: [{type: 'score', name: 'natural', score: natural},
+  ...per.flatMap(([p, l, z], i) => [{type: 'predicate', name: `present_${i}`, probability: p}, {type: 'score', name: `like_${i}`, score: l}, {type: 'score', name: `size_${i}`, score: z}])]})
+const good = parseRenderCheck(answers(3, [[0.95, 3, 2], [0.9, 2, 2]]), 2)
+assert.ok(good.ok && good.score > 0.8)
+// any one failure fails the photo: pasted look, a missing product, a lookalike, a wrong size
+assert.equal(parseRenderCheck(answers(1, [[0.95, 3, 2], [0.9, 2, 2]]), 2).ok, false)
+assert.equal(parseRenderCheck(answers(3, [[0.95, 3, 2], [0.1, 2, 2]]), 2).ok, false)
+assert.equal(parseRenderCheck(answers(3, [[0.95, 1, 2], [0.9, 2, 2]]), 2).ok, false)
+assert.equal(parseRenderCheck(answers(3, [[0.95, 3, 0], [0.9, 2, 2]]), 2).ok, false)
+// a missing answer counts as a failure, never as a pass
+assert.equal(parseRenderCheck({answers: [{type: 'score', name: 'natural', score: 3}]}, 1).ok, false)
+assert.ok(parseRenderCheck(answers(3, [[0.95, 3, 2]]), 1).score > parseRenderCheck(answers(2, [[0.6, 2, 1]]), 1).score)
+// the two calibration samples (real Decisions answers, 2026-11-21): good redraw passes, sticker render fails
+assert.equal(parseRenderCheck(answers(2.13, [[0.99, 2.2, 1.6], [1, 2.2, 1.4], [0.8, 1.9, 0.9], [1, 2.4, 1.8], [0.99, 2.4, 1.3]]), 5).ok, true)
+assert.equal(parseRenderCheck(answers(1.37, [[0.96, 2.1, 1.2], [0.18, 1.8, 1.4], [0, 0.1, 0.6]]), 3).ok, false)
 console.log('render-pipeline ok')
