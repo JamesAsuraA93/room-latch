@@ -5,15 +5,14 @@
 //   1. photo    the listing's photo from our bucket (listings/<shop>-<item>/original.*), else Shopee's CDN; or the user's upload
 //   2. cutout   image model isolates the product on transparency           cached at listings/<shop>-<item>/cutout-v2.png
 //   3. size     vision model reads the real size in cm                      cached at listings/<shop>-<item>/spec.json
-//   4. place    vision model decides where each product stands and how big it appears in the room photo
-//   5. paste    sharp pastes every cutout at that spot and size
-//   6. render   image model redraws each pasted product in the room's perspective and light; spot, real size and design stay fixed
+//   4. plan     vision model reads the room and the product images and plans the layout: how each product is used, roughly where
+//   5. render   image model furnishes the empty room from the product images and that plan, in one pass (no pasting)
 // Prompts, validation and size math live in lib/render-pipeline-core.ts (pure, tested).
 import 'server-only'
 import sharp from 'sharp'
 import {sniffImage, type RenderImage, type StyleEntry} from '@/lib/live-render-core'
 import {OpenaiRenderError, openaiEdit, openaiJson} from '@/lib/openai-render'
-import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, salvagePlacements, parseSize, placedRenderPrompt, placementPrompt, roomCleanupPrompt, parseStagingBrief, stagingBriefPrompt, sizePrompt, withUserWidth, type Placement, type ProductSize} from '@/lib/render-pipeline-core'
+import {cutoutPrompt, directRenderPrompt, fallbackSize, isShopeeImageUrl, layoutPlan, listingKeys, parsePlacements, salvagePlacements, parseSize, placementPrompt, roomCleanupPrompt, sizePrompt, withUserWidth, type Placement, type ProductSize} from '@/lib/render-pipeline-core'
 import {storage} from '@/lib/storage'
 
 const PHOTO_MAX_BYTES = 8 * 1024 * 1024
@@ -97,7 +96,7 @@ async function productCutout(p: PipelineProduct, photo: RenderImage, signal?: Ab
 }
 
 /** A smaller JPEG copy for vision calls: same content, fewer input tokens. */
-const visionCopy = async (image: Buffer) => ({image: await sharp(image).rotate().resize({width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true}).jpeg({quality: 85}).toBuffer(), mime: 'image/jpeg'})
+const visionCopy = async (image: Buffer) => ({image: await sharp(image).rotate().flatten({background: '#ffffff'}).resize({width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true}).jpeg({quality: 85}).toBuffer(), mime: 'image/jpeg'})
 
 /** Step 3. Size read once per listing. Null when the model gave no plausible size: the caller falls back. */
 async function productSize(p: PipelineProduct, photo: RenderImage, signal?: AbortSignal): Promise<ProductSize | null> {
@@ -133,20 +132,19 @@ export async function renderPlaced(input: PipelineInput, signal?: AbortSignal): 
   ])
 
   // Step 4. One retry: the answer is validated strictly and a second sample is cheap next to a wrong-size render.
-  const {data: room, info: {width: roomW, height: roomH}} = await sharp(cleaned).rotate().png().toBuffer({resolveWithObject: true})
+  const room = await sharp(cleaned).rotate().png().toBuffer()
   const prompt = placementPrompt({
-    roomType: input.roomType, styleTh: input.style.th, widthCm: input.widthCm, extraViews: input.roomReferences.length, floorPlan: !!input.floorPlan, roomAreaM2: input.roomAreaM2,
+    roomType: input.roomType, styleTh: input.style.th, widthCm: input.widthCm, extraViews: input.roomReferences.length, floorPlan: !!input.floorPlan, roomAreaM2: input.roomAreaM2, productImages: true,
     products: prepared.map(p => ({id: p.id, name: p.name, size: p.size, aspect: p.cutout.width / p.cutout.height, hint: p.hint})),
   })
-  const views = await Promise.all([room, ...input.roomReferences.map(r => r.image), ...(input.floorPlan ? [input.floorPlan.image] : [])].map(visionCopy))
+  const views = await Promise.all([room, ...input.roomReferences.map(r => r.image), ...(input.floorPlan ? [input.floorPlan.image] : []), ...prepared.map(p => p.cutout.png)].map(visionCopy))
   const ids = prepared.map(p => p.id)
   const answers: unknown[] = []
-  let placements: Placement[] | null = null, view = null
+  let placements: Placement[] | null = null
   for (let attempt = 0; attempt < 2 && !placements; attempt++) {
     const answer = await openaiJson({prompt, images: views, signal})
     answers.push(answer)
     placements = parsePlacements(answer, ids)
-    view = parsePerspective(answer) ?? view
   }
   if (!placements) {
     // render anyway with the products that got a usable spot; the rest are left out of this picture
@@ -156,42 +154,23 @@ export async function renderPlaced(input: PipelineInput, signal?: AbortSignal): 
   if (!placements.length) throw new PipelineError('placement_failed')
   const kept = placements.map(pl => prepared.find(p => p.id === pl.id)!)
 
-  // Step 5. Back to front, so nearer products cover further ones. Sizes come from the camera geometry when it is
-  // consistent (models guess apparent sizes badly, often by half); otherwise the model's own guess is kept.
-  const layers = await Promise.all(placements.map(async pl => {
-    const {cutout, size} = prepared.find(p => p.id === pl.id)!
-    const box = trueBox(cutout.width, cutout.height, pl, size, view, roomW, roomH) ?? fitCutout(cutout.width, cutout.height, pl, roomW, roomH)
-    // a floor covering is squashed onto the floor; everything else keeps its photo's proportions
-    const input = await sharp(cutout.png).resize(box.width, box.height, {fit: 'fill'}).png().toBuffer()
-    return {floorY: pl.floorY, input, left: box.left, top: box.top}
-  }))
-  const composite = await sharp(room).composite(layers.sort((a, b) => a.floorY - b.floorY)).png().toBuffer()
-
-  // Step 6a. Scene brief: the room's architecture and each product's look and place, in words (see stagingBriefPrompt).
-  const productViews = await Promise.all(kept.map(async p => ({image: await sharp(p.cutout.png).flatten({background: '#ffffff'}).resize({width: 768, height: 768, fit: 'inside', withoutEnlargement: true}).jpeg({quality: 85}).toBuffer(), mime: 'image/jpeg'})))
-  let brief = null
-  try {
-    brief = parseStagingBrief(await openaiJson({
-      prompt: stagingBriefPrompt({roomType: input.roomType, styleTh: input.style.th, stylePrompt: input.style.prompt, products: kept}),
-      images: [views[0], await visionCopy(composite), ...productViews], signal,
-    }), kept.map(p => p.id))
-  } catch (e) {
-    if ((e as Error).name === 'AbortError') throw e
-  }
-  if (!brief) console.error('staging brief unavailable: plain prompt')
-
-  // Step 6. Edit THE ROOM PHOTO (image 1) like a retoucher: the layout mock-up says where and how big, the product
-  // photos say what. Room first keeps it the user's room; the mock-up keeps the true sizes from step 5.
-  const references = [
-    {image: composite, mime: 'image/png', name: 'layout.png'},
-    ...await Promise.all(kept.map(async (p, i) => ({
-      image: await sharp(p.cutout.png).resize({width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true}).png().toBuffer(),
-      mime: 'image/png', name: `product-${i + 1}.png`,
-    }))),
-    ...(input.styleReference ? [{image: input.styleReference.image, mime: input.styleReference.kind.mime, name: `style-reference.${input.styleReference.kind.ext}`}] : []),
-  ]
-  const finalPrompt = placedRenderPrompt({styleTh: input.style.th, stylePrompt: input.style.prompt, products: kept, styleReference: !!input.styleReference, brief})
-  // One draw, no second-guessing: a product the model cannot place was already left out above.
-  return openaiEdit({image: room, mime: 'image/png', signal, prompt: finalPrompt, references})
+  // Step 5. Direct render, the Codex CLI's way: the room goes in empty with one image per product and the plan in
+  // words, and the image model composes the whole scene in one pass. Nothing is pasted.
+  const plan = [...answers].reverse().map(layoutPlan).find(Boolean) ?? ''
+  const planned = new Map(placements.map(pl => [pl.id, pl]))
+  return openaiEdit({
+    image: room, mime: 'image/png', signal,
+    prompt: directRenderPrompt({
+      styleTh: input.style.th, stylePrompt: input.style.prompt, styleReference: !!input.styleReference, plan,
+      products: kept.map(p => { const pl = planned.get(p.id); return {id: p.id, name: p.name, size: p.size, use: pl?.use, at: pl && {x: pl.centerX, y: pl.floorY}} }),
+    }),
+    references: [
+      ...await Promise.all(kept.map(async (p, i) => ({
+        image: await sharp(p.cutout.png).resize({width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true}).png().toBuffer(),
+        mime: 'image/png', name: `product-${i + 1}.png`,
+      }))),
+      ...(input.styleReference ? [{image: input.styleReference.image, mime: input.styleReference.kind.mime, name: `style-reference.${input.styleReference.kind.ext}`}] : []),
+    ],
+  })
 }
 
