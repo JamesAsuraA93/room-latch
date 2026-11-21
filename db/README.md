@@ -15,7 +15,7 @@ Prices are team ranges, not live Shopee prices. Listings store only what was see
 verification level, size as stated); there are no price, stock or image columns.
 
 `source = 'search'` rows come from `scripts/gather-shopee.mts` (Shopee public search + local Codex CLI
-deciding keep/category/styles). They add `image_url` (Shopee CDN link, checked to load, not copied),
+deciding keep/category/styles). They add `image_url` (Shopee CDN link, checked to load),
 `price_thb` and `rating` as shown on the day (`checked_on`), and `shop_name`. Existing databases need
 `db/migrations/001-shopee-gathered.sql` first. Rerun:
 `node --env-file=.env.local scripts/gather-shopee.mts` (`--dry` = no writes, `--self-test` = offline checks).
@@ -32,7 +32,13 @@ deciding keep/category/styles). They add `image_url` (Shopee CDN link, checked t
 Publishing needs both image paths and `consent_at` (DB check). Images go to Object storage at
 `designs/<design id>/before.jpg` and `after.png|jpg|webp`; strip EXIF/GPS and resize before upload.
 Deleting a profile cascades to its designs, items, likes and saves; the app must also delete the
-files under `designs/<id>/`. Shopee seller photos are never stored.
+files under `designs/<id>/`.
+
+Shopee seller photos: `scripts/copy-listing-images.mts` keeps a private copy of each listing photo at
+`listings/<shop>-<item>/original.<ext>` (`shopee_listings.image_path`, migration 004) as input for the
+AI pipeline (segmentation, reference images). MVP stopgap until a Shopee API gives images directly.
+Never serve these files to users (no public bucket, no presigned links to them in the UI): the sellers
+own the photos. Rerun to copy new listings: `node --env-file=.env.local scripts/copy-listing-images.mts`.
 
 ## AI render jobs
 
