@@ -28,7 +28,7 @@ export default function Saved() {
   const router = useRouter()
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [social, setSocial] = useState<Social>(EMPTY_SOCIAL)
-  const feed = useFeedPosts()
+  const {posts: feed} = useFeedPosts()
   useEffect(() => { setDrafts(readDrafts()); setSocial(readSocial()) }, [])
 
   function open(d: Draft) {

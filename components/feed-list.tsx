@@ -2,6 +2,7 @@
 import {useEffect, useState} from 'react'
 import {useRouter} from 'next/navigation'
 import {FeedCard} from '@/components/feed-card'
+import {Skeleton} from '@/components/ui/skeleton'
 import {t} from '@/lib/copy'
 import {useFeedPosts} from '@/lib/use-feed'
 import {DEFAULT_PLAN, EMPTY_SOCIAL, readSocial, savePlan, writeSocial, type FeedPost, type Social} from '@/lib/demo'
@@ -13,7 +14,7 @@ export function FeedList({limit, tabs = false}: {limit?: number; tabs?: boolean}
   const router = useRouter()
   const [social, setSocial] = useState<Social>(EMPTY_SOCIAL)
   const [onlySaved, setOnlySaved] = useState(false)
-  const feed = useFeedPosts()
+  const {posts: feed, status} = useFeedPosts()
   useEffect(() => setSocial(readSocial()), [])
 
   function update(next: Social) { setSocial(next); writeSocial(next) }
@@ -38,7 +39,16 @@ export function FeedList({limit, tabs = false}: {limit?: number; tabs?: boolean}
           ))}
         </div>
       )}
-      {posts.length === 0 && <p className="py-10 text-center text-sm text-zinc-500">{t.noSaved}</p>}
+      {status === 'error' && <p role="status" className="rounded-2xl bg-zinc-50 px-3 py-2 text-xs text-zinc-500">{t.feedFailed}</p>}
+      {status === 'loading' && !onlySaved && Array.from({length: Math.min(limit ?? 2, 2)}, (_, i) => (
+        <div key={i} aria-hidden="true" className="space-y-3 overflow-hidden rounded-3xl border border-zinc-200 bg-white p-3">
+          <div className="flex items-center gap-2.5"><Skeleton className="size-9 rounded-full" /><div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-1/3" /><Skeleton className="h-3 w-1/2" /></div></div>
+          <Skeleton className="-mx-3 h-80 rounded-none" />
+          <div className="grid grid-cols-2 gap-2"><Skeleton className="h-10 rounded-full" /><Skeleton className="h-10 rounded-full" /></div>
+          <Skeleton className="h-12 w-full" />
+        </div>
+      ))}
+      {posts.length === 0 && status !== 'loading' && <p className="py-10 text-center text-sm text-zinc-500">{t.noSaved}</p>}
       {posts.map(post => (
         <FeedCard key={post.id} post={post}
           liked={social.likes.includes(post.id)} saved={social.saves.includes(post.id)}
