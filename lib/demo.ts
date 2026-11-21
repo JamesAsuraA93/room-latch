@@ -1,4 +1,5 @@
 import {t} from '@/lib/copy'
+import {EXAMPLE_POSTS} from '@/lib/feed-examples'
 
 const u = (id: string, w = 800) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=75`
 
@@ -53,7 +54,7 @@ export function startDemoSession() {
   try { sessionStorage.setItem(ROOM_IMAGE_KEY, BEFORE) } catch {}
 }
 
-export type FeedItem = {name: string; priceRange: string; keyword: string}
+export type FeedItem = {name: string; priceRange?: string; keyword?: string; url?: string} // url = exact listing (no price shown)
 
 export type FeedPost = {
   id: string
@@ -61,21 +62,21 @@ export type FeedPost = {
   roomLabel: string
   style: string
   roomType: string
-  budget: number
-  width: number
-  before: string
-  after: string
+  budget?: number
+  width?: number
+  before: string | null // null = no verified owner photo yet (card shows a labelled empty slot)
+  after: string | null
   items: FeedItem[]
   local?: boolean // โพสต์ที่ผู้ใช้แชร์เอง เก็บใน localStorage เครื่องนี้เท่านั้น
+  example?: boolean // โพสต์ตัวอย่างของทีม
 }
 
-// ฟีดตัวอย่างสำหรับเดโม ยังไม่ใช่ผลงานผู้ใช้จริง
-export const FEED: FeedPost[] = [
-  { id: 'p1', user: 'พิม', roomLabel: 'มุมทำงานคอนโด 80 ซม.', style: 'muji', roomType: 'condo', budget: 5000, width: 80, before: u('photo-1522708323590-d24dbb6b0267'), after: u('photo-1616594039964-ae9021a400a0'), items: [{name:'โคมไฟเพดานไม้',priceRange:'฿450–2,000',keyword:'โคมไฟเพดาน นอร์ดิก'},{name:'ม้านั่งเก็บของ',priceRange:'฿590–2,200',keyword:'ม้านั่ง เก็บของ ฝาเปิด'},{name:'พรมผืนเล็กกันลื่น',priceRange:'฿150–700',keyword:'พรมผืนเล็ก กันลื่น'}] },
-  { id: 'p2', user: 'ต้น', roomLabel: 'ห้องนอน', style: 'japandi', roomType: 'bedroom', budget: 4000, width: 120, before: u('photo-1505693416388-ac5ce068fe85'), after: u('photo-1616627561950-9f746e330187'), items: [{name:'โคมไฟหัวเตียง',priceRange:'฿250–900',keyword:'โคมไฟตั้งโต๊ะ ข้างเตียง'},{name:'ผ้านวมสีเอิร์ธโทน',priceRange:'฿450–1,800',keyword:'ชุดผ้านวม สีเบจ'},{name:'โต๊ะข้างเตียงไม้',priceRange:'฿450–1,600',keyword:'โต๊ะข้างเตียง ไม้ 2 ชั้น'}] },
-  { id: 'p3', user: 'แนน', roomLabel: 'ห้องนั่งเล่น', style: 'scandi', roomType: 'living', budget: 15000, width: 250, before: u('photo-1484154218962-a197022b5858'), after: u('photo-1493809842364-78817add7ffb'), items: [{name:'โซฟา 2 ที่นั่งผ้า',priceRange:'฿2,500–9,000',keyword:'โซฟา 2 ที่นั่ง ผ้า'},{name:'โต๊ะกลางไม้ทรงกลม',priceRange:'฿790–3,500',keyword:'โต๊ะกลาง ไม้ ทรงกลม'},{name:'หมอนอิงผ้าลินิน',priceRange:'฿89–400',keyword:'หมอนอิง ปลอกผ้าลินิน'}] },
-  { id: 'p4', user: 'เจ', roomLabel: 'ห้องโล่ง', style: 'loft', roomType: 'empty', budget: 8000, width: 200, before: u('photo-1536376072261-38c75010e6c9'), after: u('photo-1524758631624-e2822e304c36'), items: [{name:'ชั้นวางโมดูลาร์ต่อได้',priceRange:'฿490–2,500',keyword:'ชั้นวางของ ทรงคิวบ์'},{name:'บีนแบ็กผ้าแคนวาส',priceRange:'฿590–2,200',keyword:'โซฟานั่งพื้น'},{name:'โคมไฟตั้งพื้นขาสามขา',priceRange:'฿690–2,800',keyword:'โคมไฟตั้งพื้น'}] },
-]
+// โพสต์ตัวอย่างจากห้องจริงของทีม ยังไม่มีรูป จนกว่าจะมีรูป Before ที่ยืนยัน SHA256 แล้วและ After จาก Codex (เฉพาะเครื่อง)
+// ไม่มีรูป stock แทน ของในโพสต์เป็นประกาศ Shopee จริงตาม id (lib/feed-examples.ts)
+export const FEED: FeedPost[] = EXAMPLE_POSTS.map(p => ({
+  id: p.id, user: 'ตัวอย่างจากทีม', roomLabel: p.roomLabel, style: p.style, roomType: p.roomType,
+  before: null, after: null, example: true, items: p.items.map(i => ({name: i.name, url: i.url})),
+}))
 
 // ฟีดบนเครื่องนี้: ไลก์ เซฟ และโพสต์ที่ผู้ใช้กดแชร์เอง ทั้งหมดอยู่ใน localStorage ไม่มีการส่งออกไปไหน
 export const SOCIAL_KEY = 'room-ai-social'

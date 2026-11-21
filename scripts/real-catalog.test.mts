@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {parseCsv} from '../lib/plan.ts'
 import {REAL_CATEGORIES, STYLE_ALIAS, mergeReal, toRealProducts} from '../lib/real-catalog.ts'
+import {EXAMPLE_POSTS} from '../lib/feed-examples.ts'
 
 const rows = parseCsv(readFileSync(new URL('../catalog/shopee-real-snapshot.csv', import.meta.url), 'utf8'))
 assert.equal(rows.length, 26)
@@ -65,5 +66,17 @@ for (const s of APP_STYLES) {
   console.log(`${s}: ${list.length} products, ${cats.size}/${REAL_CATEGORIES.length} categories`)
   assert.ok(list.length >= 5, `${s} has too few real products`)
   assert.ok(cats.size >= 4, `${s} covers too few categories`)
+}
+// Feed example posts: exact catalog listings only, titles and links match the catalog
+assert.deepEqual(EXAMPLE_POSTS.map(p => p.style), ['japandi', 'loft'])
+for (const post of EXAMPLE_POSTS) {
+  assert.equal(post.items.length, 4, post.id)
+  assert.equal(new Set(post.items.map(i => i.id)).size, 4, `${post.id} unique items`)
+  for (const it of post.items) {
+    const p = all.find(x => x.id === it.id)
+    assert.ok(p, `${post.id}: ${it.id} is in the catalog`)
+    assert.equal(it.name, p.title, `${it.id} title matches catalog`)
+    assert.equal(it.url, p.url, `${it.id} url is the exact listing`)
+  }
 }
 console.log(`real-catalog ok (${all.length} browsable, ${all.filter(p => p.styles.length).length} in an app style)`)

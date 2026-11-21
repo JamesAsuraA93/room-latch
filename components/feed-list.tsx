@@ -3,7 +3,7 @@ import {useEffect, useState} from 'react'
 import {useRouter} from 'next/navigation'
 import {FeedCard} from '@/components/feed-card'
 import {t} from '@/lib/copy'
-import {EMPTY_SOCIAL, FEED, readSocial, savePlan, writeSocial, type FeedPost, type Social} from '@/lib/demo'
+import {DEFAULT_PLAN, EMPTY_SOCIAL, FEED, readSocial, savePlan, writeSocial, type FeedPost, type Social} from '@/lib/demo'
 
 const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter(x => x !== id) : [...list, id])
 
@@ -16,7 +16,7 @@ export function FeedList({limit, tabs = false}: {limit?: number; tabs?: boolean}
 
   function update(next: Social) { setSocial(next); writeSocial(next) }
   function remix(p: FeedPost) {
-    savePlan({style: p.style, roomType: p.roomType, budget: p.budget, width: p.width, remixOf: p.user})
+    savePlan({style: p.style, roomType: p.roomType, budget: p.budget ?? DEFAULT_PLAN.budget, width: p.width ?? DEFAULT_PLAN.width, remixOf: p.user})
     router.push('/upload')
   }
 

@@ -1,12 +1,8 @@
 import {FeedList} from '@/components/feed-list'
 import {DemoButton, StartButton} from '@/components/start-button'
 import {t} from '@/lib/copy'
-import {loadLocalDemo, loadPrivateExample} from '@/lib/local-demo'
-import {PrivateRoomHero} from '@/components/private-room-hero'
 
 export default function Home() {
-  // เฉพาะเครื่องที่เปิดเดโมส่วนตัว (ROOMLATCH_LOCAL_DEMO=1 + room-latch/local-demo.json) build สาธารณะได้ null
-  const local = loadLocalDemo()
   return (
     <div className="space-y-6">
       <section className="rounded-3xl bg-brand p-5 text-white">
@@ -17,8 +13,6 @@ export default function Home() {
         <DemoButton variant="ghost" className="mt-2 w-full text-white hover:bg-white/10" />
         <p className="mt-3 text-center text-[11px] text-brand-soft">{t.freeQuota}</p>
       </section>
-
-      {local && <PrivateRoomHero listings={local} example={loadPrivateExample()} />}
 
       <section className="space-y-3">
         <div className="flex items-baseline justify-between">

@@ -11,12 +11,12 @@ import {EMPTY_SOCIAL, FEED, PLACEMENT_KEY, readDrafts, readSocial, roomName, sav
 function Row({post, children}: {post: FeedPost; children?: React.ReactNode}) {
   return (
     <li className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-2">
-      <div className="relative size-16 shrink-0 overflow-hidden rounded-xl">
-        <Image src={post.after} alt={post.roomLabel} fill sizes="64px" className="object-cover" />
+      <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-zinc-100">
+        {post.after && <Image src={post.after} alt={post.roomLabel} fill sizes="64px" className="object-cover" />}
       </div>
       <div className="min-w-0 flex-1 leading-tight">
         <p className="truncate text-sm font-semibold text-zinc-900">{post.roomLabel}</p>
-        <p className="truncate text-xs text-zinc-500">{post.user} · {styleName(post.style)} · {baht(post.budget)}</p>
+        <p className="truncate text-xs text-zinc-500">{post.user} · {styleName(post.style)}{post.budget ? ` · ${baht(post.budget)}` : ''}</p>
       </div>
       {children}
     </li>

@@ -1,5 +1,5 @@
 // ชื่อแบรนด์และ tagline อยู่ที่นี่ที่เดียว (เขียนอังกฤษเสมอ) ข้อความ UI อื่นเป็นภาษาไทย
-export const BRAND = {name: 'RoomLatch', tagline: 'Lock in a room that fits.', logo: '/logo.svg'} as const
+export const BRAND = {name: 'RoomLatch', tagline: 'Lock in a room that fits.', logo: '/icon-192.png'} as const
 
 export const t = {
   app: BRAND.name, tagline: BRAND.tagline, homeTitle:'แต่งมุมห้องให้ลงงบและลงขนาดจริง', homeSubtitle:'ใส่รูปห้อง เลือกสไตล์ บอกงบกับความกว้าง แล้วได้ชุดของที่ซื้อได้ทุกชิ้น', start:'ลองเล่นเลย ไม่ต้องล็อกอิน', before:'ก่อนแต่ง', after:'หลังแต่ง',
@@ -20,7 +20,7 @@ export const t = {
   login:'เข้าสู่ระบบ', loginTitle:'เก็บห้องที่แต่งไว้ดูทีหลัง', loginWhy:'ล็อกอินเพื่อบันทึกห้องที่แต่งแล้ว ดูประวัติย้อนหลัง และได้โควตาฟรีมากขึ้น', feedTitle:'ห้องที่เพิ่งแต่งกัน', tryThisStyle:'ลองสไตล์นี้', freeQuota:'ไม่ต้องล็อกอิน ไม่มีการอัปโหลดรูป',
   styleUsed:'สไตล์ที่เลือก:', approx:'ประมาณ',
   swipeHint:'ปัดดูก่อน/หลัง', itemsInRoom:'ของในห้องนี้', affNote:'ลิงก์ไปหน้าค้นหา Shopee ไม่ใช่สต็อกจริง ถ้าต่อลิงก์พันธมิตรแล้วเราอาจได้ค่าคอม โดยคุณจ่ายเท่าเดิม',
-  seeMore:'ดูห้องอื่นอีก', feedDemo:'โพสต์ตัวอย่าง ไม่ใช่ผู้ใช้จริง',
+  seeMore:'ดูห้องอื่นอีก', feedDemo:'โพสต์ตัวอย่าง ไม่ใช่ผู้ใช้จริง', examplePost:'ตัวอย่างจากทีม', noVerifiedBefore:'ยังไม่มีรูปห้องจริงที่ยืนยันแล้ว', noAfterYet:'ภาพ After ยังไม่ได้สร้าง', noStockNote:'ไม่ใช้รูป stock แทนห้องจริง', aiIllustrative:'ภาพจำลอง AI', exactListingNote:'ประกาศจริง · ราคาและสต็อกดูในประกาศ', exactNote:'ลิงก์ไปประกาศ Shopee จริง ไม่ยืนยันราคา สต็อก ตัวเลือก หรือขนาดที่พอดีกับห้อง',
   pieces:'ชิ้น',
   quickDemo:'ดูเดโมทันที (ห้องตัวอย่าง)', resetDemo:'เริ่มเดโมใหม่', resetDemoHint:'กลับไปห้องตัวอย่าง เจแปนดิ งบ ฿5,000 มุม 80 ซม. ของที่เซฟ ไลก์ และ draft ยังอยู่', budgetPresets:'ปุ่มงบด่วน',
   renderMock:'เรนเดอร์: {provider} (ไม่ได้สร้างภาพด้วย AI) ภาพหลังคือการวางรูปในเบราว์เซอร์', renderOffline:'เซิร์ฟเวอร์เรนเดอร์ไม่ตอบ ใช้การวางรูปในเบราว์เซอร์แทน',
