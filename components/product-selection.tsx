@@ -62,15 +62,19 @@ export function ProductSelection({catalog, provider: initialProvider, renderUnav
   const [recommendAttempt, setRecommendAttempt] = useState(0)
   const {fits, ranking, note: rankNote, rank} = useListingRank()
   const sending = useRef(false)
+  const catalogRef = useRef(catalog)
+  useEffect(() => { catalogRef.current = catalog }, [catalog])
 
   useEffect(() => {
     let cancelled = false
+    // Snapshot for this attempt: catalog refreshes must not reset the selection or rerun AI.
+    const catalog = catalogRef.current
     const p = readPlan(), context = selectionContext(p), previous = readSelection()
     const selected = previous?.context === context
       ? previous.items.map(item => catalog.find(candidate => candidate.id === item.id) ?? (listingImagePath(item.id) ? {...item, image: listingImagePath(item.id)} : undefined)).filter((item): item is Furniture => !!item).slice(0, MAX_FURNITURE)
       : recommendFurniture(catalog.filter(item => !!item.image), p)
     setPlan(p); setRoom(readRoomImages()[0] || ''); setItems(selected); setLoaded(true)
-    if (previous?.context === context && recommendAttempt === 0 && previous.source !== 'rules') {
+    if (previous?.context === context && recommendAttempt === 0) {
       setRecommending(false)
       setRecommendNotice(previous.notice || '')
     } else if (readRoomImages().length) {
@@ -101,19 +105,19 @@ export function ProductSelection({catalog, provider: initialProvider, renderUnav
         }).catch(() => {})
     }
     return () => { cancelled = true }
-  }, [catalog, recommendAttempt])
+  }, [recommendAttempt])
 
   useEffect(() => {
-    if (recommending || !items.some(item => unavailableImages.has(item.id))) return
+    if (busy || recommending || !items.some(item => unavailableImages.has(item.id))) return
     const result = replaceUnavailableFurniture(items, catalog, plan, unavailableImages)
     setItems(result.items); setConsent(false)
     saveSelection({context: selectionContext(plan), items: result.items, notice: recommendNotice, source: readSelection()?.source})
     setNotice(result.unfilled.length
       ? `สินค้าบางชิ้นไม่มีรูป และยังหาสินค้าทดแทนในหมวดเดิมภายในงบไม่ได้ ลองเพิ่มงบหรือเลือกสินค้าเอง`
       : 'เปลี่ยนสินค้าที่รูปเปิดไม่ได้เป็นสินค้าในหมวดเดิมแล้ว ยอดรวมยังอยู่ในงบ')
-  }, [unavailableImages, recommending, items, catalog, plan, recommendNotice])
+  }, [unavailableImages, recommending, items, catalog, plan, recommendNotice, busy])
 
-  const checkingImages = items.some(item => !readyImages.has(item.id))
+  const checkingImages = items.some(item => !readyImages.has(item.id) || unavailableImages.has(item.id))
   const overBudget = furnitureTotal(items).total > plan.budget
 
   function commit(next: Furniture[]) {
@@ -207,7 +211,7 @@ export function ProductSelection({catalog, provider: initialProvider, renderUnav
         </div>
         <div className="border-t border-zinc-100 pt-4">
           {activeJob ? <Button asChild className="w-full"><Link href="/result">ดูภาพที่กำลังสร้าง<ArrowRight className="size-4" /></Link></Button> : <>
-            <label className="mb-4 flex cursor-pointer items-start gap-3 text-base leading-7 text-zinc-800"><input type="checkbox" checked={consent} disabled={busy || recommending} onChange={e => setConsent(e.target.checked)} className="mt-1 size-5 shrink-0 accent-[var(--color-brand)]" /><span>ยินยอมส่งรูปห้อง รูปอ้างอิง และข้อมูลที่เลือกให้ AI สร้างภาพ{provider === 'openai' ? ' มีค่าใช้จ่ายตามการใช้งาน' : ''}</span></label>
+            <label className="mb-4 flex cursor-pointer items-start gap-3 text-base leading-7 text-zinc-800"><input type="checkbox" checked={consent} disabled={busy || recommending || checkingImages || !items.length || !room} onChange={e => setConsent(e.target.checked)} className="mt-1 size-5 shrink-0 accent-[var(--color-brand)]" /><span>ยินยอมส่งรูปห้อง รูปอ้างอิง และข้อมูลที่เลือกให้ AI สร้างภาพ{provider === 'openai' ? ' มีค่าใช้จ่ายตามการใช้งาน' : ''}</span></label>
             <Button className="w-full" disabled={!provider || !consent || !items.length || !room || busy || recommending || checkingImages || overBudget || checkingRender} onClick={() => void generate()}><Sparkles className="size-4" />{busy ? 'กำลังส่งงาน…' : checkingRender ? 'กำลังตรวจระบบสร้างภาพ…' : 'สร้างภาพห้อง'}<ArrowRight className="size-4" /></Button>
             {checkingImages && !recommending && <p role="status" className="mt-3 text-sm text-zinc-700">กำลังตรวจรูปสินค้าและหาชิ้นทดแทน…</p>}
             {overBudget && <p role="alert" className="mt-3 text-sm text-red-700">ยอดรวมเกินงบ กรุณาเปลี่ยนสินค้าหรือปรับงบก่อนสร้างภาพ</p>}

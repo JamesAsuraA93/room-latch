@@ -56,7 +56,17 @@ npm run build
 
 ตั้ง `OPENAI_API_KEY` บนเซิร์ฟเวอร์เพื่อเปิดสร้างภาพ ทั้ง local และ production ใช้ OpenAI Images API โดยตรง ไม่เรียก Codex CLI และไม่ใช้ค่า `ROOMLATCH_RENDER_PROVIDER` แบบเก่า ตัวเลือกโมเดลอยู่ใน `OPENAI_IMAGE_MODEL` และ `OPENAI_IMAGE_QUALITY`
 
+บน Vercel Production (`VERCEL_ENV=production`) ค่าเริ่มต้นของภาพห้องเป็น `gpt-image-2.6-sunburst` / `max`; local และ preview ใช้ `gpt-image-2.5-sunburst` / `low` ถ้ามี Production env กำหนดโมเดลหรือคุณภาพไว้แล้ว ให้เปลี่ยนเป็น `OPENAI_IMAGE_MODEL=gpt-image-2.6-sunburst` และ `OPENAI_IMAGE_QUALITY=max` แล้ว deploy โค้ดเวอร์ชันนี้ การตั้ง env มีลำดับเหนือค่าเริ่มต้นเสมอ ระดับ `max` เพิ่มเวลาและค่าใช้จ่าย ทั้งขั้นเตรียมห้องและภาพสุดท้าย ยังอยู่ภายใต้เวลาสูงสุด 300 วินาทีของ route จึงต้องตรวจเวลาใช้งานจริงหลัง deploy
+
 Flow: `POST /api/render/live` (multipart: รูปห้อง 1–4, รูปสินค้า ≤6, รูปสไตล์ ≤1, ต้องมี `consent=yes`) → poll `GET /api/render/live/[id]` → `GET /api/render/live/[id]/image`
+
+### เตรียมห้องและแชร์ภาพก่อน–หลัง
+
+ระบบเรียก OpenAI Images API ลบสิ่งมีชีวิต (รวมคน สัตว์ พืช เงาและภาพสะท้อน) จากภาพห้องหลักก่อนวิเคราะห์ตำแหน่งและวางสินค้า ขั้นนี้เพิ่มการเรียก image model หนึ่งครั้งต่อห้อง ภาพต้นฉบับยังคงใช้เป็น Before ไม่ถูกเขียนทับ ผลลัพธ์เดิมต้องสร้างใหม่เพื่อใช้ prompt นี้
+
+หลังสร้างสำเร็จ ปุ่ม **แชร์ลงฟีด** เปิดตัวอย่าง Before/After และให้เผยแพร่ด้วยบัญชีที่เข้าสู่ระบบ `POST /api/designs/[id]/publish` บันทึกภาพทั้งคู่ลง `designs/<id>/` พร้อมรายการสินค้าในตาราง `designs` และ `design_items` เดิม จึงไม่ต้องเพิ่ม migration และภาพที่เผยแพร่ไม่หมดอายุตาม render job การกดซ้ำใช้โพสต์เดิม ฟีดอ่านผ่าน `/api/feed` และแสดงผลลัพธ์จริง ไม่ใช้ภาพสไตล์แทน
+
+`GET /api/render/live` คืนชื่อ `model` และ `quality` ที่เซิร์ฟเวอร์ตั้งไว้ โดยไม่เปิดเผย key ใช้ตรวจ production หลัง deploy ได้
 
 ### เลือกสินค้าให้ลงงบ (`POST /api/recommend`)
 

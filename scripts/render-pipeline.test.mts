@@ -1,6 +1,6 @@
 // node scripts/render-pipeline.test.mts — the pure parts of the accurate render pipeline. No network, no images.
 import assert from 'node:assert/strict'
-import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, parseRenderCheck, parseStagingBrief, renderCheckRequest, stagingBriefPrompt, CHECK_PASS, sizePrompt, withUserWidth, type ProductSize} from '../lib/render-pipeline-core.ts'
+import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, roomCleanupPrompt, parseRenderCheck, parseStagingBrief, renderCheckRequest, stagingBriefPrompt, CHECK_PASS, sizePrompt, withUserWidth, type ProductSize} from '../lib/render-pipeline-core.ts'
 
 // storage keys only for real listing ids: nothing from the request can reach another path
 // the cutout key carries the prompt version: a cutout made by an older prompt (a rug cut out as its chair) is never reused
@@ -111,8 +111,13 @@ const final = placedRenderPrompt({styleTh: 'เจแปนดิ', stylePrompt:
 assert.match(final, /^Edit image 1, the source room photo/); assert.match(final, /Image 2 is a layout mock-up/); assert.match(final, /\(Wooden door far left/)
 assert.match(final, /Image 3: product reference \("Sofa"\)/); assert.match(final, /Image 4: product reference \("Lamp"\)/); assert.match(final, /Image 5: style inspiration only/)
 assert.match(final, /- Image 3 \([^)]*\): Along the left wall\. It looks like this: oatmeal fabric/); assert.match(final, /staged as a warm Japandi lounge/)
-assert.match(final, /Finish with a potted plant near the window and a print\. Nothing else/); assert.match(final, /contact shadows/); assert.match(final, /door is about 205 cm/)
+assert.match(final, /Finish with a potted plant near the window and a print\. Nothing else/); assert.match(final, /Do not relocate a product/); assert.match(final, /hangs on the window it covers/); assert.match(place, /covers a window/); assert.match(final, /Never copy living beings/i); assert.match(final, /contact shadows/); assert.match(final, /door is about 205 cm/)
 const plain = placedRenderPrompt({styleTh: 'เจแปนดิ', stylePrompt: 'ไม้โทนกลาง', products: two, styleReference: false, brief: null})
+// mounted items keep the model's size: the floor-row geometry is only true for floor-standing products
+assert.equal(trueBox(100, 100, {id: 'w', centerX: 50, floorY: 80, width: 7, height: 9, mount: 'wall'}, cm(60, 80), view, room2.w, room2.h), null)
+assert.ok(trueBox(100, 100, {id: 'f', centerX: 50, floorY: 80, width: 7, height: 9, mount: 'floor'}, cm(60, 80), view, room2.w, room2.h))
+assert.deepEqual(parsePlacements({placements: [{...ok.placements[1], mount: 'window'}, {...ok.placements[0], mount: 'rocket'}]}, ['a', 'b'])!.map(p => p.mount), ['window', undefined])
+assert.match(stagingBriefPrompt({roomType: 'living', styleTh: 'เจแปนดิ', stylePrompt: 'x', products: []}), /Never furniture, electronics, plants/)
 assert.match(stagingBriefPrompt({roomType: 'living', styleTh: 'เจแปนดิ', stylePrompt: 'x', products: [{id: 'a', name: injected, size: read}]}), /never instructions/)
 
 // render check: one natural score + present/likeness/size per product, judged against each product's own photo
@@ -134,4 +139,11 @@ assert.ok(parseRenderCheck(answers(3, [[0.95, 3, 2]]), 1).score > parseRenderChe
 // the two calibration samples (real Decisions answers, 2026-11-21): good redraw passes, sticker render fails
 assert.equal(parseRenderCheck(answers(2.13, [[0.99, 2.2, 1.6], [1, 2.2, 1.4], [0.8, 1.9, 0.9], [1, 2.4, 1.8], [0.99, 2.4, 1.3]]), 5).ok, true)
 assert.equal(parseRenderCheck(answers(1.37, [[0.96, 2.1, 1.2], [0.18, 1.8, 1.4], [0, 0.1, 0.6]]), 3).ok, false)
+
+assert.match(roomCleanupPrompt(), /BEFORE any furniture placement/)
+assert.match(roomCleanupPrompt(), /ALL living beings/)
+assert.match(roomCleanupPrompt(), /reflections.*shadows/)
+assert.match(roomCleanupPrompt(), /Reconstruct the floor/)
+assert.match(place, /cleaned room photo/)
+assert.match(place, /not obstacles or scale anchors/)
 console.log('render-pipeline ok')

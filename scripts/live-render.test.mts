@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import {buildPrompt, childEnv, clientKey, gateRequest, isLoopbackHost, liveProvider, pngSize, sniffImage} from '../lib/live-render-core.ts'
 import {renderLimits, renderPath} from '../lib/render-jobs.ts'
-import {MODEL_DEFAULTS, OPENAI_EDITS_URL, OpenaiRenderError, buildEditRequest, openaiEdit, openaiJson} from '../lib/openai-render.ts'
+import {MODEL_DEFAULTS, OPENAI_EDITS_URL, OpenaiRenderError, buildEditRequest, imageSettings, openaiEdit, openaiJson} from '../lib/openai-render.ts'
 import {codexFailureReason, elapsedLabel, isTerminalJob} from '../lib/render-outcome.ts'
 import {designError} from '../lib/design-errors.ts'
 
@@ -175,3 +175,30 @@ const productPrompt=buildPrompt({key:'minimal',th:'มินิมอล',prompt
 assert.match(productPrompt,/product-1.jpg/)
 assert.doesNotMatch(productPrompt,/\$imagegen/)
 console.log('product photo validation and OpenAI attachment contract ok')
+
+// Diagnostics and requests resolve exactly the same model; no credentials escape.
+assert.deepEqual(imageSettings({OPENAI_API_KEY: 'private'}), MODEL_DEFAULTS.render)
+assert.deepEqual(imageSettings({OPENAI_IMAGE_MODEL: 'configured-render', OPENAI_IMAGE_QUALITY: 'high'}), {model: 'configured-render', quality: 'high'})
+assert.deepEqual(imageSettings({OPENAI_CUTOUT_MODEL: 'configured-cutout'}, 'cutout'), {model: 'configured-cutout', quality: MODEL_DEFAULTS.cutout.quality})
+
+// Production requests and readiness share the highest-quality settings; preview stays economical.
+const productionEnv = {OPENAI_API_KEY: 'sk-test', VERCEL_ENV: 'production'}
+assert.deepEqual(imageSettings(productionEnv), {model: 'gpt-image-2.6-sunburst', quality: 'max'})
+assert.deepEqual(imageSettings({VERCEL_ENV: 'preview'}), MODEL_DEFAULTS.render)
+assert.deepEqual(imageSettings(productionEnv, 'cutout'), MODEL_DEFAULTS.cutout)
+const productionForm = buildEditRequest({image: img, mime: 'image/png', prompt: 'room', env: productionEnv}).init.body as FormData
+assert.equal(productionForm.get('model'), 'gpt-image-2.6-sunburst')
+assert.equal(productionForm.get('quality'), 'max')
+assert.equal(productionForm.has('input_fidelity'), false)
+assert.deepEqual(imageSettings({...productionEnv, OPENAI_IMAGE_MODEL: 'gpt-image-1.5'}), {model: 'gpt-image-1.5', quality: 'high'})
+assert.deepEqual(imageSettings({...productionEnv, OPENAI_IMAGE_MODEL: 'gpt-image-2.5-flare', OPENAI_IMAGE_QUALITY: 'medium'}), {model: 'gpt-image-2.5-flare', quality: 'medium'})
+for (const model of ['gpt-image-2.5-sunburst', 'gpt-image-2.5-flare-2026-09-08', 'gpt-image-2.6-sunburst', 'gpt-image-2.6-flare']) {
+  for (const quality of ['xhigh', 'max']) {
+    const form = buildEditRequest({image: img, mime: 'image/png', prompt: 'room', env: {...fakeEnv, OPENAI_IMAGE_MODEL: model, OPENAI_IMAGE_QUALITY: quality}}).init.body as FormData
+    assert.equal(form.get('quality'), quality)
+  }
+}
+for (const [model, quality] of [['gpt-image-1.5', 'max'], ['gpt-image-2', 'xhigh'], ['gpt-image-2.6-sunburst', 'typo']]) {
+  assert.throws(() => buildEditRequest({image: img, mime: 'image/png', prompt: 'room', env: {...fakeEnv, OPENAI_IMAGE_MODEL: model, OPENAI_IMAGE_QUALITY: quality}}), (error: unknown) => error instanceof OpenaiRenderError && error.code === 'invalid_quality')
+}
+console.log('production image model and extended quality contract ok')

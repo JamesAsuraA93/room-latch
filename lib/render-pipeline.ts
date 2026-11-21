@@ -1,18 +1,19 @@
 // Server-only accurate render pipeline (production, OpenAI). Runs anywhere Node runs, Vercel included:
 // HTTP calls to OpenAI, Neon Object Storage through the S3 client, and sharp for pixels. No local tools.
 //
+//   0. clean    image model removes living beings from the room before placement
 //   1. photo    the listing's photo from our bucket (listings/<shop>-<item>/original.*), else Shopee's CDN; or the user's upload
 //   2. cutout   image model isolates the product on transparency           cached at listings/<shop>-<item>/cutout-v2.png
 //   3. size     vision model reads the real size in cm                      cached at listings/<shop>-<item>/spec.json
 //   4. place    vision model decides where each product stands and how big it appears in the room photo
 //   5. paste    sharp pastes every cutout at that spot and size
-//   6. render   image model makes the pasted products sit naturally; position, size and look stay fixed
+//   6. render   image model redraws each pasted product in the room's perspective and light; spot, real size and design stay fixed
 // Prompts, validation and size math live in lib/render-pipeline-core.ts (pure, tested).
 import 'server-only'
 import sharp from 'sharp'
 import {sniffImage, type RenderImage, type StyleEntry} from '@/lib/live-render-core'
 import {OpenaiRenderError, openaiEdit, openaiJson} from '@/lib/openai-render'
-import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, parseRenderCheck, parseStagingBrief, stagingBriefPrompt, renderCheckRequest, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
+import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, roomCleanupPrompt, parseRenderCheck, parseStagingBrief, stagingBriefPrompt, renderCheckRequest, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
 import {storage} from '@/lib/storage'
 import {DECISIONS_MODEL, decide} from '@/lib/decisions'
 
@@ -120,22 +121,25 @@ async function productSize(p: PipelineProduct, photo: RenderImage, signal?: Abor
 
 /** Runs the whole pipeline and returns the final PNG. */
 export async function renderPlaced(input: PipelineInput, signal?: AbortSignal): Promise<Buffer> {
-  // Steps 1-3 per product, all products in parallel.
-  const prepared = await Promise.all(input.products.map(async p => {
-    const photo = await productPhoto(p, signal)
-    const [cutout, read] = await Promise.all([productCutout(p, photo, signal), productSize(p, photo, signal)])
-    // a width the user typed always wins; no readable size → a cautious guess instead of failing the render
-    const size = withUserWidth(read ?? fallbackSize(cutout.width / cutout.height), p.widthCm)
-    return {...p, cutout, size}
-  }))
+  // Clean the room (no people, pets or living plants) before placement; prepare product assets concurrently.
+  const [cleaned, prepared] = await Promise.all([
+    openaiEdit({image: input.room.image, mime: input.room.kind.mime, prompt: roomCleanupPrompt(), signal}),
+    Promise.all(input.products.map(async p => {
+      const photo = await productPhoto(p, signal)
+      const [cutout, read] = await Promise.all([productCutout(p, photo, signal), productSize(p, photo, signal)])
+      // a width the user typed always wins; no readable size → a cautious guess instead of failing the render
+      const size = withUserWidth(read ?? fallbackSize(cutout.width / cutout.height), p.widthCm)
+      return {...p, cutout, size}
+    })),
+  ])
 
   // Step 4. One retry: the answer is validated strictly and a second sample is cheap next to a wrong-size render.
-  const {data: room, info: {width: roomW, height: roomH}} = await sharp(input.room.image).rotate().png().toBuffer({resolveWithObject: true})
+  const {data: room, info: {width: roomW, height: roomH}} = await sharp(cleaned).rotate().png().toBuffer({resolveWithObject: true})
   const prompt = placementPrompt({
     roomType: input.roomType, styleTh: input.style.th, widthCm: input.widthCm, extraViews: input.roomReferences.length, floorPlan: !!input.floorPlan, roomAreaM2: input.roomAreaM2,
     products: prepared.map(p => ({id: p.id, name: p.name, size: p.size, aspect: p.cutout.width / p.cutout.height, hint: p.hint})),
   })
-  const views = await Promise.all([input.room, ...input.roomReferences, ...(input.floorPlan ? [input.floorPlan] : [])].map(r => visionCopy(r.image)))
+  const views = await Promise.all([room, ...input.roomReferences.map(r => r.image), ...(input.floorPlan ? [input.floorPlan.image] : [])].map(visionCopy))
   let placements = null, view = null
   for (let attempt = 0; attempt < 2 && !placements; attempt++) {
     const answer = await openaiJson({prompt, images: views, signal})

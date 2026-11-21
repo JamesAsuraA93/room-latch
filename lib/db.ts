@@ -88,7 +88,7 @@ export async function recommendCandidates(style: string, budget: number, perCate
 
 export type DbFeedPost = {
   id: string; user: string; roomLabel: string; style: string; roomType: string
-  budget: number | null; width: number | null; imageW: number; imageH: number
+  budget: number | null; width: number | null; imageW: number; imageH: number; example: boolean
   items: {name: string; url: string}[]
 }
 
@@ -97,6 +97,7 @@ export async function publishedDesigns(limit = 20): Promise<DbFeedPost[]> {
   const {rows} = await db().query<DbFeedPost>(
     `select d.id, p.display_name as "user", coalesce(d.title, '') as "roomLabel", d.style_id as style, d.room_type as "roomType",
             d.budget_thb as budget, d.width_cm as width, d.image_w as "imageW", d.image_h as "imageH",
+            (d.owner_id = 'team-roomlatch') as example,
             coalesce((select json_agg(json_build_object('name', coalesce(l.title, c.name), 'url', coalesce(l.url, c.listing_url)) order by i.position)
                         from design_items i
                         left join shopee_listings l on l.id = i.listing_id
