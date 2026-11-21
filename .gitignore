@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+.env*.local
+.DS_Store
+*.tsbuildinfo
+.neon
+**/settings.local.json
+
+# local-only demo: owner's real room markers, /real-demo, Shopee seller photos (no rights)
+local-demo.json
+LOCAL_ONLY.md
+app/real-demo/
+components/real-demo.tsx
+lib/real-demo-listings.ts
+public/listings/
