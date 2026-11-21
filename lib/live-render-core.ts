@@ -24,17 +24,23 @@ export const isLoopbackHost = (host: string) => LOOPBACK.test(host)
 
 const hostOf = (origin: string) => { try { return new URL(origin).host } catch { return null } }
 
-/** Request gate: feature on, same-origin only, and Codex answers only requests made on this machine. */
-export function gateRequest(env: Env, headers: Headers, method: string): Gate {
-  const provider = liveProvider(env)
-  if (!provider) return {ok: false, status: 404, code: 'live_render_disabled'}
+/** Same-origin rule shared by every paid endpoint: browser says same-origin, and writes carry this server's Origin. */
+export function sameOrigin(headers: Headers, method: string): {ok: true} | {ok: false; status: number; code: string} {
   const host = headers.get('host') ?? ''
-  if (provider === 'codex' && !isLoopbackHost(host)) return {ok: false, status: 403, code: 'not_loopback'}
   const site = headers.get('sec-fetch-site')
   if (site && site !== 'same-origin') return {ok: false, status: 403, code: 'cross_site'}
   // state-changing requests must carry an Origin that is this server
   if (method !== 'GET' && hostOf(headers.get('origin') ?? '') !== host) return {ok: false, status: 403, code: 'bad_origin'}
-  return {ok: true, provider}
+  return {ok: true}
+}
+
+/** Request gate: feature on, same-origin only, and Codex answers only requests made on this machine. */
+export function gateRequest(env: Env, headers: Headers, method: string): Gate {
+  const provider = liveProvider(env)
+  if (!provider) return {ok: false, status: 404, code: 'live_render_disabled'}
+  if (provider === 'codex' && !isLoopbackHost(headers.get('host') ?? '')) return {ok: false, status: 403, code: 'not_loopback'}
+  const origin = sameOrigin(headers, method)
+  return origin.ok ? {ok: true, provider} : origin
 }
 
 /**

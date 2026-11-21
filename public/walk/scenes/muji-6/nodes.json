@@ -1,0 +1,35 @@
+[
+  {
+    "id": "capture",
+    "position": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "image": "scenes/muji-6/capture.jpg",
+    "depth": "scenes/muji-6/capture_depth",
+    "bg": "scenes/muji-6/capture_bg"
+  },
+  {
+    "id": "front_of_sofa",
+    "position": [
+      0.5448004035859036,
+      0.0,
+      -0.713591476473455
+    ],
+    "image": "scenes/muji-6/front_of_sofa.jpg",
+    "depth": "scenes/muji-6/front_of_sofa_depth",
+    "bg": "scenes/muji-6/front_of_sofa_bg"
+  },
+  {
+    "id": "beside_sofa",
+    "position": [
+      1.109922457411569,
+      0.0,
+      0.025861158174314905
+    ],
+    "image": "scenes/muji-6/beside_sofa.jpg",
+    "depth": "scenes/muji-6/beside_sofa_depth",
+    "bg": "scenes/muji-6/beside_sofa_bg"
+  }
+]

@@ -1,0 +1,13 @@
+[
+  {
+    "id": "shopee-228922246-50062368031",
+    "title": "Evergreen Furniture ชุดโซฟา 3 ที่นั่ง รุ่น D ครบชุด งานไม้ยางพาราประสาน สไตล์มินิมอล",
+    "url": "https://shopee.co.th/product/228922246/50062368031",
+    "price_thb": 19861.0,
+    "masks": {
+      "capture": "scenes/muji-demo/capture_sofa.png",
+      "front_of_sofa": "scenes/muji-demo/front_of_sofa_sofa.png",
+      "beside_sofa": "scenes/muji-demo/beside_sofa_sofa.png"
+    }
+  }
+]

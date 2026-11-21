@@ -7,6 +7,7 @@ import {resizeRoomImage} from '@/lib/image'
 import {pickedFiles, pressProps} from '@/lib/drop-zone'
 import {PRODUCT_RENDER_KEY} from '@/lib/storage-keys'
 import {Button} from '@/components/ui/button'
+import {t} from '@/lib/copy'
 import type {Provider} from '@/lib/live-render-core'
 import {MAX_PRODUCT_IMAGES} from '@/lib/product-render'
 
@@ -169,6 +170,7 @@ export function LiveRenderPanel({provider, ready = true, roomImage, roomImages =
         <div className="flex flex-wrap items-center justify-between gap-2 px-2 pt-3">
           <Link href="/upload" className="inline-flex min-h-10 items-center gap-2 text-xs text-brand"><ImagePlus className="size-4" />เปลี่ยนรูปห้อง</Link>
           {output && <a href={output} download="roomlatch-room.png" className="inline-flex min-h-10 items-center gap-2 text-xs font-semibold text-brand"><ArrowDownToLine className="size-4" />ดาวน์โหลดภาพ</a>}
+          {output && <Button asChild variant="outline"><Link href="/walk">{t.walkDemo}</Link></Button>}
         </div>
       </div>
       <div className="flex gap-2 overflow-x-auto">

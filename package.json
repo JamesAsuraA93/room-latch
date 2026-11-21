@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node scripts/plan.test.mts && node scripts/render.test.mts && node scripts/live-render.test.mts && node scripts/real-catalog.test.mts && node scripts/room-images.test.mts",
+    "test": "node scripts/plan.test.mts && node scripts/render.test.mts && node scripts/live-render.test.mts && node scripts/real-catalog.test.mts && node scripts/room-images.test.mts && node scripts/decisions.test.mts",
     "test:db": "node --env-file=.env.local scripts/render-jobs.test.mts",
     "db:seed": "node scripts/export-db-seed.mts > db/seed.sql"
   },

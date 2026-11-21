@@ -121,3 +121,64 @@ export async function adminOverview(): Promise<AdminOverview> {
   ])
   return {totals, grid, recentListings, users, recentDesigns}
 }
+
+// ---- Image search / room fit (lib/image-search.ts) ----
+
+export type ImageListing = {id: string; title: string; category: string; url: string; image_path: string | null; image_url: string | null; price_thb: string | null}
+
+/** Listings that have some photo the AI can look at (private bucket copy first, Shopee CDN link second). */
+export async function listingsWithImages(ids: string[]): Promise<ImageListing[]> {
+  if (!ids.length) return []
+  const {rows} = await db().query<ImageListing>(
+    `select id, title, category, url, image_path, image_url, price_thb::text from shopee_listings
+      where id = any($1) and (image_path is not null or image_url is not null)`, [ids])
+  return rows
+}
+
+/** Candidates for "find this product": one category, hand-checked rows first, then best rated. */
+export async function imageListingsByCategory(category: string, limit: number): Promise<ImageListing[]> {
+  const {rows} = await db().query<ImageListing>(
+    `select id, title, category, url, image_path, image_url, price_thb::text from shopee_listings
+      where category = $1 and (image_path is not null or image_url is not null)
+      order by (source = 'search'), rating desc nulls last, title limit $2`, [category, limit])
+  return rows
+}
+
+export type FoundListing = {id: string; shop: number; item: number; title: string; category: string; imageUrl: string; price: number | null; shopName: string | null; rating: number | null; styles: string[]}
+
+/**
+ * Store listings found by image search, same shape and rules as scripts/gather-shopee.mts:
+ * source 'search', verification 'listing', and curated rows (snapshot/addition/exact_match) are never overwritten.
+ * Returns the ids actually written.
+ */
+export async function upsertFoundListings(rows: FoundListing[]): Promise<string[]> {
+  if (!rows.length) return []
+  const client = await db().connect()
+  const written: string[] = []
+  try {
+    await client.query('begin')
+    for (const r of rows) {
+      const res = await client.query(
+        `insert into shopee_listings (id, shop_id, item_id, title, category, verification, evidence_status, source, checked_on, image_url, price_thb, shop_name, rating)
+         values ($1, $2, $3, $4, $5, 'listing', 'shopee_search_api+decisions_image_match', 'search', current_date, $6, $7, $8, $9)
+         on conflict (id) do update set title = excluded.title, category = excluded.category, checked_on = excluded.checked_on,
+           image_url = excluded.image_url, price_thb = excluded.price_thb, shop_name = excluded.shop_name, rating = excluded.rating
+         where shopee_listings.source = 'search'
+         returning id`,
+        [r.id, r.shop, r.item, r.title, r.category, r.imageUrl, r.price, r.shopName, r.rating])
+      if (!res.rowCount) continue
+      if (r.styles.length) {
+        await client.query('delete from shopee_listing_styles where listing_id = $1', [r.id])
+        await client.query('insert into shopee_listing_styles (listing_id, style_id) select $1, unnest($2::text[])', [r.id, r.styles])
+      }
+      written.push(r.id)
+    }
+    await client.query('commit')
+    return written
+  } catch (e) {
+    await client.query('rollback').catch(() => {})
+    throw e
+  } finally {
+    client.release()
+  }
+}

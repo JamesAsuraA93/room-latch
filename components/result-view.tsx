@@ -6,6 +6,7 @@ import {PageHeader} from '@/components/page-header'
 import {LiveRenderPanel} from '@/components/live-render-panel'
 import type {Provider} from '@/lib/live-render-core'
 import {RealProductsPicker} from '@/components/real-products-picker'
+import {ImageSearch} from '@/components/image-search'
 import type {RealProduct} from '@/lib/real-catalog'
 import Link from 'next/link'
 import {Button} from '@/components/ui/button'
@@ -31,6 +32,11 @@ export function ResultView({products, live = null, real = []}: {products: Produc
   // สินค้าจริงที่เลือก (แยกจากชุดที่คิดงบ) อยู่ในหน่วยความจำของหน้านี้เท่านั้น
   const [renderSession, setRenderSession] = useState(0)
   const [realIds, setRealIds] = useState<string[]>([])
+  // สินค้าที่ได้จากการค้นด้วยรูป (อยู่ใน DB แล้ว จึงใส่ภาพ AI ได้) + คะแนนความเข้ากับห้อง จาก /api/listings/rank
+  const [found, setFound] = useState<RealProduct[]>([])
+  const [roomFits, setRoomFits] = useState<Record<string, number> | undefined>(undefined)
+  const [ranking, setRanking] = useState(false)
+  const [rankNote, setRankNote] = useState('')
   const [plan, setPlan] = useState<Plan>(DEFAULT_PLAN)
   const [before, setBefore] = useState(BEFORE)
   const [roomImages, setRoomImages] = useState<string[]>([])
@@ -73,8 +79,29 @@ export function ResultView({products, live = null, real = []}: {products: Produc
   const photoOptions = Array.from(new Map([
     ...result.items.map(p => ({id: p.id, name: p.name, image: placement.photos[p.id], widthCm: p.widthCm ?? undefined})),
     ...exactItems,
-    ...real.filter(p => realIds.includes(p.id)).map(p => ({id: p.id, name: p.title})),
+    ...[...found, ...real].filter(p => realIds.includes(p.id)).map(p => ({id: p.id, name: p.title})),
   ].map(p => [p.id, p])).values())
+
+  const allReal = useMemo(() => [...found, ...real.filter(p => !found.some(f => f.id === p.id))], [found, real])
+
+  // ส่งรูปห้องหลัก + สไตล์ + id สินค้าในสไตล์นี้ ไปให้ server ถาม Decisions API ว่าชิ้นไหนเข้ากับห้องนี้
+  async function rankByRoom() {
+    if (!before.startsWith('data:')) { setRankNote('ใช้ได้กับรูปห้องที่คุณอัปโหลดเท่านั้น (ห้องตัวอย่างยังไม่รองรับ)'); return }
+    const ids = allReal.filter(p => p.styles.includes(plan.style)).map(p => p.id).slice(0, 40)
+    if (!ids.length) { setRankNote('ยังไม่มีสินค้าในสไตล์นี้ให้เรียง'); return }
+    setRanking(true); setRankNote('')
+    try {
+      const form = new FormData()
+      form.append('image', await (await fetch(before)).blob(), 'room.jpg')
+      form.append('style', plan.style)
+      form.append('ids', JSON.stringify(ids))
+      const res = await fetch('/api/listings/rank', {method: 'POST', body: form})
+      const json = await res.json().catch(() => null)
+      if (!res.ok) { setRankNote(json?.error?.code === 'rank_disabled' ? 'เซิร์ฟเวอร์นี้ยังไม่ได้เปิดการเรียงตามห้อง' : `เรียงไม่สำเร็จ (${json?.error?.code ?? res.status})`); return }
+      setRoomFits(Object.fromEntries((json.fits as {id: string; score: number}[]).map(f => [f.id, f.score])))
+      if (json.unranked?.length) setRankNote(`${json.unranked.length} ชิ้นยังไม่มีรูปในคลัง จึงยังไม่ได้ให้คะแนน`)
+    } catch { setRankNote('เรียงไม่สำเร็จ กรุณาลองใหม่') } finally { setRanking(false) }
+  }
 
   function updatePlacement(next: PlacementState) {
     setPlacement(next)
@@ -243,7 +270,15 @@ export function ResultView({products, live = null, real = []}: {products: Produc
 
       <details className="rl-disclosure">
         <summary>เลือกสินค้าเพิ่มเติมจาก Shopee {realIds.length ? `· เลือกแล้ว ${realIds.length} ชิ้น` : ''}</summary>
-        <RealProductsPicker all={real} style={plan.style} selected={realIds} onChange={setRealIds} />
+        <RealProductsPicker all={allReal} style={plan.style} selected={realIds} onChange={setRealIds}
+          fits={roomFits} onRank={rankByRoom} ranking={ranking} rankNote={rankNote} />
+      </details>
+      <details className="rl-disclosure">
+        <summary>ค้นสินค้าด้วยรูป {found.length ? `· ได้มา ${found.length} ชิ้น` : ''}</summary>
+        <ImageSearch style={plan.style} onPick={p => {
+          setFound(prev => prev.some(x => x.id === p.id) ? prev : [p, ...prev])
+          setRealIds(prev => prev.includes(p.id) || prev.length >= 6 ? prev : [...prev, p.id])
+        }} />
       </details>
       <details className="rl-disclosure">
         <summary>เพิ่มสินค้าของคุณจากลิงก์ประกาศ</summary>

@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RoomLatch · เดินดูห้อง 360°</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; font-family: system-ui, sans-serif; }
+    canvas { display: block; touch-action: none; }
+    #hud { position: fixed; left: 16px; bottom: 16px; color: #eee; background: rgba(0,0,0,.55);
+           padding: 8px 12px; border-radius: 8px; font-size: 13px; line-height: 1.5; pointer-events: none; white-space: pre-line; }
+    #walk { position: fixed; right: 16px; bottom: 16px; width: 72px; height: 72px; border-radius: 50%;
+            border: 0; background: rgba(255,255,255,.8); font-size: 14px; display: none; }
+    @media (pointer: coarse) { #walk { display: block; } }
+    #card { position: fixed; right: 16px; top: 16px; width: min(320px, calc(100vw - 32px)); display: none;
+            background: rgba(255,255,255,.96); color: #1d1d1f; border-radius: 14px; overflow: hidden;
+            box-shadow: 0 12px 40px rgba(0,0,0,.25); font-size: 14px; }
+    #card img { width: 100%; height: 170px; object-fit: contain; background: #f2f2f2; display: block; }
+    #card .body { padding: 12px 14px 14px; }
+    #card .title { font-weight: 600; line-height: 1.35; max-height: 3.9em; overflow: hidden; }
+    #card .price { margin-top: 8px; font-size: 20px; font-weight: 700; color: #ee4d2d; }
+    #card .was { margin-left: 8px; font-size: 13px; color: #888; text-decoration: line-through; font-weight: 400; }
+    #card .size { margin-top: 4px; color: #666; font-size: 12px; }
+    #card a.buy { display: block; margin-top: 12px; padding: 10px; text-align: center; border-radius: 10px;
+                  background: #ee4d2d; color: #fff; text-decoration: none; font-weight: 600; }
+    #card button.close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border: 0;
+                         border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; font-size: 16px; cursor: pointer; }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <div id="hud">กำลังโหลด...</div>
+  <button id="walk">เดิน</button>
+  <div id="card">
+    <button class="close" aria-label="ปิด">&times;</button>
+    <img alt="">
+    <div class="body">
+      <div class="title"></div>
+      <div class="price"></div>
+      <div class="size"></div>
+      <a class="buy" target="_blank" rel="noopener noreferrer">ดูสินค้าบน Shopee</a>
+    </div>
+  </div>
+  <script type="module">
+    import * as THREE from "three";
+
+    // debug knobs: ?ldi=0 ?blur=0 ?nodes=a,b ?cam=x,z,yaw,pitch
+    const PARAMS = new URLSearchParams(location.search);
+    const STEP = 1;
+    const EDGE_RATIO = 1.08;
+    const MAX_WALK = 1.5;
+    const SPEED = 1.2;
+    const LOOK_SPEED = 0.004;
+    const FILL_RADIUS = 40;
+    const FILL_TEX_W = 512;
+    const FILL_BLUR_PX = Number(PARAMS.get("blur") ?? 24);
+    const FEATHER = Number(PARAMS.get("feather") ?? 3);  // vertices over which a single torn edge fades out
+    // where tears are dense (lots of small cracks, not one clean edge) dissolve the whole patch into frost
+    const DENSITY_R = 12;
+    const DENSITY_LO = Number(PARAMS.get("dlo") ?? 0.1);
+    const DENSITY_HI = Number(PARAMS.get("dhi") ?? 0.3);
+
+    const EXPAND_HINT_AT = 0.8;
+    const HELP = "ลากเพื่อมองรอบ · คลิกตรงที่อยากไป หรือกด W/A/S/D · 1-9 ไปจุดนั้นตรงๆ";
+    const hud = document.getElementById("hud");
+
+    async function loadDepth(base) {
+      const [metaRes, binRes] = await Promise.all([fetch(`${base}.json`), fetch(`${base}.bin`)]);
+      if (!metaRes.ok || !binRes.ok) throw new Error(`ไม่พบ ${base}.* ให้รัน python3 depth.py ก่อน`);
+      return { meta: await metaRes.json(), depth: new Float32Array(await binRes.arrayBuffer()) };
+    }
+
+    // RGBA vertex colours: white, with alpha ramping from 0 at a tear to 1 FEATHER vertices away
+    function featherAlpha(d, gw, gh, torn) {
+      const dist = new Float32Array(gw * gh).fill(FEATHER);
+      for (let k = 0; k < dist.length; k++) if (torn[k]) dist[k] = 0;
+      for (let pass = 0; pass < FEATHER; pass++) {
+        for (let j = 0; j < gh; j++) {
+          for (let i = 0; i < gw; i++) {
+            const k = j * gw + i;
+            let m = dist[k];
+            if (i > 0) m = Math.min(m, dist[k - 1] + 1);
+            if (i < gw - 1) m = Math.min(m, dist[k + 1] + 1);
+            if (j > 0) m = Math.min(m, dist[k - gw] + 1);
+            if (j < gh - 1) m = Math.min(m, dist[k + gw] + 1);
+            dist[k] = m;
+          }
+        }
+      }
+      const density = tornDensity(torn, gw, gh, DENSITY_R);
+      const smooth = (t) => { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); };
+      const rgba = new Float32Array(gw * gh * 4).fill(1);
+      for (let k = 0; k < dist.length; k++) {
+        const edge = smooth(dist[k] / FEATHER);
+        const dense = 1 - smooth((density[k] - DENSITY_LO) / (DENSITY_HI - DENSITY_LO));
+        rgba[k * 4 + 3] = Math.min(edge, dense);
+      }
+      return rgba;
+    }
+
+    // fraction of torn vertices in a (2r+1)^2 window, via a summed-area table
+    function tornDensity(torn, gw, gh, r) {
+      const sat = new Float64Array((gw + 1) * (gh + 1));
+      for (let j = 0; j < gh; j++) {
+        let row = 0;
+        for (let i = 0; i < gw; i++) {
+          row += torn[j * gw + i];
+          sat[(j + 1) * (gw + 1) + i + 1] = sat[j * (gw + 1) + i + 1] + row;
+        }
+      }
+      const out = new Float32Array(gw * gh);
+      for (let j = 0; j < gh; j++) {
+        const y0 = Math.max(0, j - r), y1 = Math.min(gh, j + r + 1);
+        for (let i = 0; i < gw; i++) {
+          const x0 = Math.max(0, i - r), x1 = Math.min(gw, i + r + 1);
+          const sum = sat[y1 * (gw + 1) + x1] - sat[y0 * (gw + 1) + x1] - sat[y1 * (gw + 1) + x0] + sat[y0 * (gw + 1) + x0];
+          out[j * gw + i] = sum / ((y1 - y0) * (x1 - x0));
+        }
+      }
+      return out;
+    }
+
+    function roomMaterial(map) {
+      return new THREE.MeshBasicMaterial({ map, side: THREE.DoubleSide, vertexColors: FEATHER > 0,
+        transparent: FEATHER > 0 });
+    }
+
+    function buildRoomGeometry({ width: w, height: h }, depth) {
+      const gw = Math.floor(w / STEP) + 1;
+      const gh = Math.floor(h / STEP) + 1;
+      const pos = new Float32Array(gw * gh * 3);
+      const uv = new Float32Array(gw * gh * 2);
+      const d = new Float32Array(gw * gh);
+
+      for (let j = 0; j < gh; j++) {
+        const v = Math.min(j * STEP, h - 1);
+        const lat = (0.5 - (j * STEP) / h) * Math.PI;
+        for (let i = 0; i < gw; i++) {
+          const k = j * gw + i;
+          const u = (i * STEP) % w;
+          const lon = ((i * STEP) / w - 0.5) * 2 * Math.PI;
+          const r = depth[v * w + u];
+          d[k] = r;
+          pos[k * 3] = r * Math.cos(lat) * Math.sin(lon);
+          pos[k * 3 + 1] = r * Math.sin(lat);
+          pos[k * 3 + 2] = -r * Math.cos(lat) * Math.cos(lon);
+          uv[k * 2] = (i * STEP) / w;
+          uv[k * 2 + 1] = 1 - (j * STEP) / h;
+        }
+      }
+
+      // skip quads that straddle a depth jump, otherwise they smear into rubber sheets
+      const index = new Uint32Array((gw - 1) * (gh - 1) * 6);
+      const torn = new Uint8Array(gw * gh);
+      let n = 0;
+      for (let j = 0; j < gh - 1; j++) {
+        for (let i = 0; i < gw - 1; i++) {
+          const a = j * gw + i, b = a + 1, c = a + gw, e = c + 1;
+          const lo = Math.min(d[a], d[b], d[c], d[e]);
+          const hi = Math.max(d[a], d[b], d[c], d[e]);
+          if (lo <= 0 || hi / lo > EDGE_RATIO) {  // depth 0 = no background layer here
+            torn[a] = torn[b] = torn[c] = torn[e] = 1;
+            continue;
+          }
+          index[n++] = a; index[n++] = c; index[n++] = b;
+          index[n++] = b; index[n++] = c; index[n++] = e;
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+      if (FEATHER > 0) geo.setAttribute("color", new THREE.BufferAttribute(featherAlpha(d, gw, gh, torn), 4));
+      geo.setIndex(new THREE.BufferAttribute(index.subarray(0, n), 1));
+      return geo;
+    }
+
+    const USE_LDI = PARAMS.get("ldi") !== "0";
+    const requestedScene = PARAMS.get("scene");
+    const SCENE = requestedScene === "scenes/muji-demo" ? requestedScene : "scenes/muji-6";
+    const EYE_H = 1.6;                           // depth.py assumes the camera stood 1.6 m above the floor
+    const PRODUCT_CLEARANCE = 0.3;               // how close you can walk up to a product
+    const VIEW_BLEND = 0.12;                     // fraction of a view step spent cross-fading
+    const CLICK_PX = 6;                          // a press that moves less than this is a click, not a drag
+    const ALPHA_HIT = 40;                        // clicks on transparent card pixels fall through
+    const ALPHA_MAP_W = 256;
+    const MASK_MAP_W = 1024;
+    const HOVER_GAIN = 1.15;
+    // moving between standpoints: glide the camera through the depth meshes while cross-fading
+    // (Matterport-style parallax) instead of a plain fade; keep it short to avoid motion sickness
+    const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const TRAVEL_MS = REDUCED_MOTION ? 250 : 800;
+    const WALK_FADE_MS = 300;
+    const BASE_FOV = 75;
+    const FOV_DIP = REDUCED_MOTION ? 0 : 7;
+    const AUTO_TRAVEL = PARAMS.get("free") !== "1";   // ?free=1 brings back free WASD walking
+    const STEP_CONE_DEG = 55;      // W/A/S/D picks the standpoint within this angle of that direction
+    const SAFE_LINK = /^https:\/\/(www\.)?shopee\.co\.th\//;
+    const ONLY_NODES = PARAMS.get("nodes")?.split(",");
+
+    async function loadTexture(url, renderer) {
+      const tex = await new THREE.TextureLoader().loadAsync(url);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return tex;
+    }
+
+    // last-resort hole filler: a tiny, heavily blurred copy, so whatever leaks through
+    // reads as soft colour instead of a sharp duplicate of a lamp or a painting
+    function blurredTexture(tex) {
+      const canvas = document.createElement("canvas");
+      canvas.width = FILL_TEX_W;
+      canvas.height = FILL_TEX_W / 2;
+      const ctx = canvas.getContext("2d");
+      // Apple-style frost: heavy blur, a little paler and brighter, like mist where nothing is known
+      ctx.filter = `blur(${FILL_BLUR_PX}px) saturate(0.8) brightness(1.06)`;
+      // draw three copies side by side so the blur wraps across the 360 seam instead of fading to black
+      for (const dx of [-canvas.width, 0, canvas.width]) ctx.drawImage(tex.image, dx, 0, canvas.width, canvas.height);
+      const out = new THREE.CanvasTexture(canvas);
+      out.colorSpace = THREE.SRGBColorSpace;
+      return out;
+    }
+
+    async function loadBackground(node, meta, renderer) {
+      const [res, tex] = await Promise.all([fetch(`${node.bg}.bin`), loadTexture(`${node.bg}.jpg`, renderer)]);
+      if (!res.ok) return null;
+      const depth = new Float32Array(await res.arrayBuffer());
+      const mesh = new THREE.Mesh(buildRoomGeometry(meta, depth), roomMaterial(tex));
+      mesh.renderOrder = 0;
+      return mesh;
+    }
+
+    async function buildNode(node, renderer) {
+      const [{ meta, depth }, tex] = await Promise.all([
+        loadDepth(node.depth), loadTexture(node.display || node.image, renderer)]);
+
+      const group = new THREE.Group();
+      group.position.fromArray(node.position);
+      // far sphere with the same image plugs the holes left by dropped quads
+      const fill = new THREE.Mesh(new THREE.SphereGeometry(FILL_RADIUS, 64, 32),
+        new THREE.MeshBasicMaterial({ map: FILL_BLUR_PX > 0 ? blurredTexture(tex) : tex,
+          side: THREE.BackSide, depthWrite: false }));
+      fill.scale.x = -1;
+      fill.rotation.y = -Math.PI / 2;
+      fill.renderOrder = -1;
+      group.add(fill);
+      const main = new THREE.Mesh(buildRoomGeometry(meta, depth), roomMaterial(tex));
+      main.renderOrder = 1;  // after the background layer so its faded edges blend over it
+      group.add(main);
+      // second layer: what's behind object edges, so tears show wall instead of the far sphere
+      if (USE_LDI && node.bg) {
+        const bg = await loadBackground(node, meta, renderer);
+        if (bg) group.add(bg);
+      }
+      group.visible = false;
+      return group;
+    }
+
+    // ---- product impostors: N photos around the product, swap to the one matching where you stand
+    function shadowTexture() {
+      const c = document.createElement("canvas");
+      c.width = c.height = 128;
+      const g = c.getContext("2d");
+      const grad = g.createRadialGradient(64, 64, 8, 64, 64, 64);
+      grad.addColorStop(0, "rgba(0,0,0,0.75)");
+      grad.addColorStop(0.6, "rgba(0,0,0,0.35)");
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 128, 128);
+      return new THREE.CanvasTexture(c);
+    }
+
+    // small copy of a view's alpha channel, so clicks can ignore the transparent margin
+    function alphaMap(image) {
+      const c = document.createElement("canvas");
+      c.width = ALPHA_MAP_W;
+      c.height = Math.max(1, Math.round(ALPHA_MAP_W * image.height / image.width));
+      const g = c.getContext("2d", { willReadFrequently: true });
+      g.drawImage(image, 0, 0, c.width, c.height);
+      return { w: c.width, h: c.height, data: g.getImageData(0, 0, c.width, c.height).data };
+    }
+
+    // grey/white product mask (PNG) -> small luminance map, sampled by panorama uv
+    function maskMap(image) {
+      const c = document.createElement("canvas");
+      c.width = MASK_MAP_W; c.height = MASK_MAP_W / 2;
+      const g = c.getContext("2d", { willReadFrequently: true });
+      g.drawImage(image, 0, 0, c.width, c.height);
+      return { w: c.width, h: c.height, data: g.getImageData(0, 0, c.width, c.height).data };
+    }
+    async function loadMasks(masks) {
+      const out = {};
+      for (const [node, url] of Object.entries(masks || {})) {
+        const img = new Image();
+        img.src = url;
+        try { await img.decode(); out[node] = maskMap(img); } catch { /* missing mask: product not clickable there */ }
+      }
+      return out;
+    }
+    const maskHit = (m, uv) => {
+      const x = Math.min(m.w - 1, Math.floor(uv.x * m.w)), y = Math.min(m.h - 1, Math.floor((1 - uv.y) * m.h));
+      return m.data[(y * m.w + x) * 4] > 127;
+    };
+
+    async function makeImpostor(spot, renderer) {
+      const product = await (await fetch(`products/${spot.product}/product.json`)).json();
+      const views = await Promise.all(product.views.map(async (v) => {
+        const tex = await loadTexture(v.file, renderer);
+        return { ...v, tex, alpha: alphaMap(tex.image) };
+      }));
+      const byStep = new Map(views.map((v) => [Math.round(v.azimuth_deg / (360 / views.length)) % views.length, v]));
+      const step = 360 / views.length;
+      const { w, d } = product.size_m;
+      const yaw = THREE.MathUtils.degToRad(spot.yaw_deg);
+      const front = new THREE.Vector2(Math.sin(yaw), Math.cos(yaw));
+      const right = new THREE.Vector2(-front.y, front.x);
+      const pos = new THREE.Vector2(spot.x, spot.z);
+
+      const plane = () => new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, alphaTest: 0.01 }));
+      const a = plane(), b = plane();
+      a.renderOrder = 5; b.renderOrder = 6;
+      const shadow = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.25, d + 0.25),
+        new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }));
+      shadow.rotation.set(-Math.PI / 2, yaw, 0, "YXZ");  // lie flat, then turn with the product
+      shadow.position.set(spot.x, -EYE_H + 0.005, spot.z);
+      shadow.renderOrder = 4;
+      const group = new THREE.Group();
+      group.add(shadow, a, b);
+      if (PARAMS.get("boxes") === "1") {  // debug: the product's true footprint, to check the card sits inside it
+        const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, product.size_m.h, d)),
+          new THREE.LineBasicMaterial({ color: 0x00c8ff, depthTest: false }));
+        box.position.set(spot.x, -EYE_H + product.size_m.h / 2, spot.z);
+        box.rotation.y = yaw;
+        box.renderOrder = 10;
+        group.add(box);
+      }
+
+      const smooth = (t) => { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); };
+      function setView(mesh, view, opacity, toCam, phi) {
+        const width = Math.abs(w * Math.cos(phi)) + Math.abs(d * Math.sin(phi));
+        const height = width / view.aspect;
+        const depthAlong = Math.abs(w * Math.sin(phi)) + Math.abs(d * Math.cos(phi));
+        // stand the card at the near face, so its bottom edge meets the floor where the product does
+        const at = pos.clone().addScaledVector(toCam, depthAlong / 2);
+        mesh.userData.view = view;
+        mesh.material.map = view.tex;
+        mesh.material.opacity = opacity;
+        mesh.material.needsUpdate = true;
+        mesh.scale.set(width, height, 1);
+        mesh.position.set(at.x, -EYE_H + height / 2, at.y);
+        mesh.rotation.set(0, Math.atan2(toCam.x, toCam.y), 0);
+        mesh.visible = opacity > 0.001;
+      }
+
+      return {
+        group, product, spot,
+        hit(raycaster) {
+          for (const h of raycaster.intersectObjects([b, a], false)) {
+            if (!h.object.visible || !h.uv) continue;
+            const { alpha } = h.object.userData.view;
+            const x = Math.min(alpha.w - 1, Math.floor(h.uv.x * alpha.w));
+            const y = Math.min(alpha.h - 1, Math.floor((1 - h.uv.y) * alpha.h));
+            if (alpha.data[(y * alpha.w + x) * 4 + 3] > ALPHA_HIT) return h.distance;
+          }
+          return null;
+        },
+        highlight(on) {
+          for (const m of [a, b]) m.material.color.setScalar(on ? HOVER_GAIN : 1);
+        },
+        blocks(p) {
+          const rel = new THREE.Vector2(p.x - spot.x, p.z - spot.z);
+          return Math.abs(rel.dot(right)) < w / 2 + PRODUCT_CLEARANCE && Math.abs(rel.dot(front)) < d / 2 + PRODUCT_CLEARANCE;
+        },
+        update(cam) {
+          const toCam = new THREE.Vector2(cam.x - spot.x, cam.z - spot.z);
+          const dist = toCam.length();
+          toCam.normalize();
+          const phiDeg = (THREE.MathUtils.radToDeg(Math.atan2(toCam.dot(right), toCam.dot(front))) + 360) % 360;
+          const f = phiDeg / step;
+          const k0 = Math.floor(f) % views.length, k1 = (k0 + 1) % views.length;
+          const t = smooth((f - Math.floor(f) - (0.5 - VIEW_BLEND / 2)) / VIEW_BLEND);
+          const phi = THREE.MathUtils.degToRad(phiDeg);
+          setView(a, byStep.get(k0), 1, toCam, phi);
+          setView(b, byStep.get(k1), t, toCam, phi);
+          return { phiDeg, view: t > 0.5 ? k1 : k0, dist };
+        },
+      };
+    }
+
+    function makeWorld(scene, renderer) {
+      const nodes = [];
+      const products = [];
+      const hotspots = [];
+      let shown = null, fade = null;
+      const nearest = (p) => nodes.reduce((best, n) =>
+        (!best || p.distanceTo(n.pos) < p.distanceTo(best.pos) ? n : best), null);
+      return {
+        nodes,
+        async add(node) {
+          const group = await buildNode(node, renderer);
+          scene.add(group);
+          const entry = { ...node, pos: new THREE.Vector3().fromArray(node.position), group };
+          nodes.push(entry);
+          return entry;
+        },
+        nearest,
+        products,
+        async addProduct(spot) {
+          const imp = await makeImpostor(spot, renderer);
+          scene.add(imp.group);
+          products.push(imp);
+        },
+        canStand: (p) => nodes.some((n) => Math.hypot(p.x - n.pos.x, p.z - n.pos.z) <= MAX_WALK)
+          && !products.some((imp) => imp.blocks(p)),
+        show(p, dt, travel) {
+          const target = travel ? travel.to : nearest(p);
+          if (!shown) {
+            shown = target;
+            nodes.forEach((n) => setOpacity(n.group, n === target ? 1 : 0));
+          } else if (target !== shown && (!fade || fade.to !== target)) {
+            fade = { from: fade ? fade.to : shown, to: target, t: 0, dur: travel ? travel.dur : WALK_FADE_MS, travel: !!travel };
+          }
+          if (fade) {
+            fade.t += dt * 1000;
+            const raw = fade.t / fade.dur;
+            // during a glide, swap rooms around the middle of the move, when motion hides the change best
+            const k = smoothstep(fade.travel ? (raw - 0.2) / 0.6 : raw);
+            setOpacity(fade.from.group, 1 - k);
+            setOpacity(fade.to.group, k);
+            if (raw >= 1) { setOpacity(fade.from.group, 0); shown = fade.to; fade = null; }
+          }
+          hotspots.forEach((h) => { h.visible = h.userData.node !== (fade ? fade.to : shown); });
+          return shown;
+        },
+        addHotspot(node) {
+          const ring = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.24, 48),
+            new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, depthTest: false }));
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.set(node.pos.x, -EYE_H + HOTSPOT_Y, node.pos.z);
+          ring.renderOrder = 20;
+          ring.userData.node = node;
+          scene.add(ring);
+          hotspots.push(ring);
+        },
+        hotspots,
+      };
+    }
+
+    const smoothstep = (t) => { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); };
+
+    function setOpacity(group, a) {
+      group.visible = a > 0.001;
+      group.traverse((o) => {
+        if (!o.material) return;
+        if (o.userData.baseOpacity === undefined) o.userData.baseOpacity = o.material.opacity;
+        o.material.transparent = true;
+        o.material.opacity = o.userData.baseOpacity * a;
+      });
+    }
+
+    function makeControls(camera, dom, world, onGenerate, onClick, onHover, onJump, onStep) {
+      const state = { yaw: 0, pitch: 0, keys: new Set(), touchWalk: false, dragging: false, lastX: 0, lastY: 0,
+                      downX: 0, downY: 0 };
+      dom.addEventListener("pointerdown", (e) => {
+        state.dragging = true;
+        state.lastX = state.downX = e.clientX;
+        state.lastY = state.downY = e.clientY;
+        dom.setPointerCapture(e.pointerId);
+      });
+      dom.addEventListener("pointerup", (e) => {
+        state.dragging = false;
+        if (Math.hypot(e.clientX - state.downX, e.clientY - state.downY) < CLICK_PX) onClick(e);
+      });
+      dom.addEventListener("pointermove", (e) => {
+        if (!state.dragging) { onHover(e); return; }
+        state.yaw += (e.clientX - state.lastX) * LOOK_SPEED;
+        state.pitch = THREE.MathUtils.clamp(state.pitch + (e.clientY - state.lastY) * LOOK_SPEED, -1.4, 1.4);
+        state.lastX = e.clientX; state.lastY = e.clientY;
+      });
+      addEventListener("keydown", (e) => {
+        state.keys.add(e.code);
+        if (e.code === "KeyR") camera.position.set(0, 0, 0);
+        if (/^Digit[1-9]$/.test(e.code)) onJump(Number(e.code.slice(5)) - 1);
+        const step = { KeyW: 0, ArrowUp: 0, KeyD: -90, ArrowRight: -90, KeyS: 180, ArrowDown: 180, KeyA: 90, ArrowLeft: 90 }[e.code];
+        if (step !== undefined && !e.repeat) onStep(state.yaw + THREE.MathUtils.degToRad(step));
+        if (e.code === "KeyG") onGenerate();
+      });
+      addEventListener("keyup", (e) => state.keys.delete(e.code));
+      const btn = document.getElementById("walk");
+      btn.addEventListener("pointerdown", (e) => { e.stopPropagation(); if (AUTO_TRAVEL) onStep(state.yaw); else state.touchWalk = true; });
+      btn.addEventListener("pointerup", () => { state.touchWalk = false; });
+      btn.addEventListener("pointerleave", () => { state.touchWalk = false; });
+
+      const has = (...codes) => codes.some((c) => state.keys.has(c));
+      function update(dt) {
+        camera.rotation.set(state.pitch, state.yaw, 0, "YXZ");
+        if (update.locked || AUTO_TRAVEL) return;
+        const fwd = (has("KeyW", "ArrowUp") || state.touchWalk ? 1 : 0) - (has("KeyS", "ArrowDown") ? 1 : 0);
+        const side = (has("KeyD", "ArrowRight") ? 1 : 0) - (has("KeyA", "ArrowLeft") ? 1 : 0);
+        if (!fwd && !side) return;
+        const dir = new THREE.Vector3(side, 0, -fwd).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), state.yaw);
+        const next = camera.position.clone().addScaledVector(dir, SPEED * dt);
+        if (world.canStand(next)) camera.position.copy(next);
+      }
+      update.setLook = (yaw, pitch) => { state.yaw = yaw; state.pitch = pitch; };
+      return update;
+    }
+
+    async function main() {
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(innerWidth, innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(BASE_FOV, innerWidth / innerHeight, 0.05, 200);
+      camera.rotation.order = "YXZ";
+
+      const world = makeWorld(scene, renderer);
+      let busy = false;
+      let status = "";
+      const res = await fetch(SCENE ? `${SCENE}/nodes.json` : "api/nodes");
+      if (!res.ok) throw new Error("เปิดผ่าน python3 server.py เพื่อให้มี /api/nodes");
+      const all = await res.json();
+      // nodes that failed the glitch check stay on disk but never get shown
+      const shown = all.filter((n) => n.glitch?.status !== "fail" && (!ONLY_NODES || ONLY_NODES.includes(n.id)));
+      for (const node of shown) await world.add(node);
+      const listings = [];
+      if (SCENE) {
+        const pr = await fetch(`${SCENE}/placements.json`);
+        if (pr.ok) for (const spot of await pr.json()) await world.addProduct(spot);
+        // products drawn into the panoramas themselves: one mask per standpoint says which pixels are the product
+        const lr = await fetch(`${SCENE}/products.json`);
+        if (lr.ok) for (const p of await lr.json()) listings.push({ ...p, maskMaps: await loadMasks(p.masks) });
+      }
+      const hidden = all.length - world.nodes.length;
+      if (hidden) status = `ซ่อน ${hidden} จุดที่ไม่ผ่าน glitch check`;
+
+
+      async function generateHere() {
+        if (busy) return;
+        if (SCENE) { status = "ฉากนี้เป็นไฟล์คงที่ กด G ไม่ได้"; return; }
+        busy = true;
+        const started = performance.now();
+        const timer = setInterval(() => {
+          status = `กำลังสร้างภาพจากจุดนี้... ${((performance.now() - started) / 1000).toFixed(0)} วิ`;
+        }, 500);
+        try {
+          const r = await fetch("api/expand", { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ position: camera.position.toArray() }) });
+          const body = await r.json();
+          if (!r.ok) throw new Error(body.error || r.statusText);
+          const secs = ((performance.now() - started) / 1000).toFixed(0);
+          if (body.glitch?.status === "fail") {
+            status = `จุด ${body.id} ไม่ผ่าน glitch check (${secs} วิ) ไม่นำมาแสดง ลองขยับใกล้จุดเดิมแล้วกด G ใหม่`;
+          } else {
+            await world.add(body);
+            status = `ได้จุดใหม่ ${body.id} (${body.glitch?.status ?? "?"}) ใน ${secs} วิ`;
+          }
+        } catch (err) {
+          status = `สร้างไม่สำเร็จ: ${err.message}`;
+        } finally {
+          clearInterval(timer);
+          busy = false;
+        }
+      }
+
+      const raycaster = new THREE.Raycaster();
+      const card = document.getElementById("card");
+      card.querySelector(".close").addEventListener("click", () => { card.style.display = "none"; });
+
+      function productAt(e) {
+        const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+        raycaster.setFromCamera(ndc, camera);
+        let best = null, bestD = Infinity;
+        for (const imp of world.products) {
+          const d = imp.hit(raycaster);
+          if (d !== null && d < bestD) { best = imp; bestD = d; }
+        }
+        return best;
+      }
+
+      function showCard(imp) {
+        const { product } = imp;
+        const info = product.listing || {};
+        card.querySelector("img").style.display = "";
+        card.querySelector("img").src = product.views[0].file;
+        card.querySelector(".title").textContent = info.title || product.name;
+        const price = card.querySelector(".price");
+        price.textContent = info.price_thb ? `฿${info.price_thb.toLocaleString("th-TH")}` : "";
+        if (info.price_before_thb > info.price_thb) {
+          const was = document.createElement("span");
+          was.className = "was";
+          was.textContent = `฿${info.price_before_thb.toLocaleString("th-TH")}`;
+          price.append(was);
+        }
+        const { w, d, h } = product.size_m;
+        card.querySelector(".size").textContent = `ขนาด ${Math.round(w * 100)} x ${Math.round(d * 100)} x ${Math.round(h * 100)} ซม.`;
+        const buy = card.querySelector(".buy");
+        const ok = SAFE_LINK.test(info.url || "");
+        buy.style.display = ok ? "block" : "none";
+        if (ok) buy.href = info.url;
+        card.style.display = "block";
+      }
+
+      function listingAt(e) {
+        if (!listings.length) return null;
+        const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+        raycaster.setFromCamera(ndc, camera);
+        const here = currentNode();
+        const hit = raycaster.intersectObject(here.group, true).find((h) => h.object.visible && h.uv && h.object.geometry.type === "BufferGeometry");
+        if (!hit) return null;
+        return listings.find((p) => p.maskMaps[here.id] && maskHit(p.maskMaps[here.id], hit.uv)) || null;
+      }
+      // products baked into the scene: name, price and the shop link only; shop photos are not shown here
+      function showListingCard(p) {
+        const img = card.querySelector("img");
+        img.removeAttribute("src");
+        img.style.display = "none";
+        card.querySelector(".title").textContent = p.title;
+        card.querySelector(".price").textContent = p.price_thb ? `฿${Number(p.price_thb).toLocaleString("th-TH")} (ราคาตอนค้น ยังไม่ยืนยัน)` : "";
+        card.querySelector(".size").textContent = "";
+        const buy = card.querySelector(".buy");
+        const ok = SAFE_LINK.test(p.url || "");
+        buy.style.display = ok ? "block" : "none";
+        if (ok) buy.href = p.url;
+        card.style.display = "block";
+      }
+
+      let travel = null;
+      function startTravel(node) {
+        if (travel || !node) return;
+        travel = { from: camera.position.clone(), to: node, t: 0, dur: TRAVEL_MS };
+        update.locked = true;
+      }
+      function stepTravel(dt) {
+        if (!travel) return;
+        travel.t += dt * 1000;
+        const raw = Math.min(1, travel.t / travel.dur);
+        const k = smoothstep(raw);
+        if (REDUCED_MOTION) {
+          if (raw >= 0.5) camera.position.copy(travel.to.pos);
+        } else {
+          camera.position.lerpVectors(travel.from, travel.to.pos, k);
+        }
+        camera.fov = BASE_FOV - FOV_DIP * Math.sin(Math.PI * raw);
+        camera.updateProjectionMatrix();
+        if (raw >= 1) { camera.position.copy(travel.to.pos); travel = null; update.locked = false; }
+      }
+      function hotspotAt(e) {
+        const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+        raycaster.setFromCamera(ndc, camera);
+        const hit = raycaster.intersectObjects(world.hotspots.filter((h) => h.visible), false)[0];
+        return hit ? hit.object : null;
+      }
+
+      let hovered = null;
+      let hoveredSpot = null;
+      const onHover = (e) => {
+        const spot = hotspotAt(e);
+        if (spot !== hoveredSpot) {
+          hoveredSpot?.material.color.set(0xffffff);
+          spot?.material.color.set(0x7fd4ff);
+          hoveredSpot = spot;
+        }
+        const imp = spot ? null : productAt(e);
+        if (spot) { renderer.domElement.style.cursor = "pointer"; hovered?.highlight(false); hovered = null; return; }
+        if (!imp && listingAt(e)) { renderer.domElement.style.cursor = "pointer"; return; }
+        if (imp === hovered) return;
+        hovered?.highlight(false);
+        imp?.highlight(true);
+        hovered = imp;
+        renderer.domElement.style.cursor = imp ? "pointer" : "";
+      };
+      const onClick = (e) => {
+        const spot = hotspotAt(e);
+        if (spot) { startTravel(spot.userData.node); return; }
+        const imp = productAt(e);
+        if (imp) { showCard(imp); return; }
+        const listing = listingAt(e);
+        if (listing) { showListingCard(listing); return; }
+        // go the way the user clicked: same cone rule as W/A/S/D, aimed at the clicked spot
+        const p = floorPoint(e);
+        if (!p) return;
+        onStep(Math.atan2(-(p.x - camera.position.x), -(p.z - camera.position.z)));
+      };
+      const onJump = (i) => startTravel(world.nodes[i]);
+      const currentNode = () => world.nearest(camera.position);
+      function onStep(yaw) {
+        const here = currentNode();
+        const dir = new THREE.Vector2(-Math.sin(yaw), -Math.cos(yaw));
+        const cone = Math.cos(THREE.MathUtils.degToRad(STEP_CONE_DEG));
+        let best = null, bestScore = -Infinity;
+        for (const n of world.nodes) {
+          if (n === here) continue;
+          const to = new THREE.Vector2(n.pos.x - camera.position.x, n.pos.z - camera.position.z);
+          const dist = to.length();
+          const c = to.normalize().dot(dir);
+          if (c < cone) continue;
+          const score = c - 0.15 * dist;          // prefer straight ahead, then nearer
+          if (score > bestScore) { best = n; bestScore = score; }
+        }
+        startTravel(best);
+      }
+      function floorPoint(e) {
+        const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+        raycaster.setFromCamera(ndc, camera);
+        const room = currentNode().group;
+        const hit = raycaster.intersectObject(room, true).find((h) => h.object.visible && h.object.geometry.type === "BufferGeometry");
+        return hit ? hit.point : null;
+      }
+
+      const update = makeControls(camera, renderer.domElement, world, generateHere, onClick, onHover, onJump, onStep);
+      // ?cam=x,z,yawDeg,pitchDeg pins the camera, handy for before/after screenshots
+      const cam = PARAMS.get("cam");
+      if (cam) {
+        const [x, z, yaw, pitch] = cam.split(",").map(Number);
+        camera.position.set(x || 0, 0, z || 0);
+        update.setLook(THREE.MathUtils.degToRad(yaw || 0), THREE.MathUtils.degToRad(pitch || 0));
+      }
+      addEventListener("resize", () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+      });
+
+      const clock = new THREE.Clock();
+      let lastHud = "";
+      renderer.setAnimationLoop(() => {
+        const dt = Math.min(clock.getDelta(), 0.1);
+        update(dt);
+        stepTravel(dt);
+        const cur = world.show(camera.position, dt, travel);
+        const seen = world.products.map((imp) => ({ imp, ...imp.update(camera.position) }));
+        const away = camera.position.distanceTo(cur.pos);
+        const hint = !SCENE && !busy && away > EXPAND_HINT_AT ? "\nเดินมาไกลแล้ว กด G เพื่อสร้างภาพต่อจากตรงนี้" : "";
+        const prod = seen.map((p) => `${p.imp.product.name}: มุม ${p.phiDeg.toFixed(0)}° ภาพ ${p.view} ห่าง ${p.dist.toFixed(1)} ม.`).join("\n");
+        const text = `${HELP}${listings.length ? " · คลิกสินค้าในห้องเพื่อดูรายละเอียด" : ""}\nจุด ${cur.id} (${world.nodes.length} จุด)${status ? " · " + status : ""}${hint}${prod ? "\n" + prod : ""}`;
+        if (text !== lastHud) { hud.textContent = text; lastHud = text; }
+        renderer.render(scene, camera);
+      });
+    }
+
+    main().catch((err) => { hud.textContent = err.message; console.error(err); });
+  </script>
+</body>
+</html>

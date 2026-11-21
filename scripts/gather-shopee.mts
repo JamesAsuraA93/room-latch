@@ -21,40 +21,17 @@ import path from 'node:path'
 import pg from 'pg'
 import {REAL_CATEGORIES} from '../lib/real-catalog.ts'
 import {STYLE_IDS, isStyleId} from '../lib/styles.ts'
+import {CATEGORY_SEARCH_WORDS, listingId as idOf, parseSearch, searchShopee, shopeeImage, SHOPEE_UA as UA, STYLE_SEARCH_WORDS, type Candidate} from '../lib/shopee-search.ts'
 
 type Cat = typeof REAL_CATEGORIES[number]
-export type Candidate = {shop: number; item: number; title: string; image: string; price: number | null; rating: number | null; shopName: string | null; hints: Set<string>}
+export type {Candidate}
 export type Decision = {id: string; keep: boolean; category: Cat; styles: string[]}
 
-const STYLE_WORDS: Record<string, string> = {
-  minimal: 'มินิมอล', muji: 'สไตล์มูจิ', japandi: 'เจแปนดิ', scandi: 'สแกนดิเนเวียน',
-  loft: 'ลอฟท์', luxe: 'โมเดิร์น หรูหรา', boho: 'โบฮีเมียน', nordic: 'นอร์ดิก',
-}
-const CAT_WORDS: Record<Cat, string[]> = {
-  seating: ['โซฟา', 'เก้าอี้'],
-  table: ['โต๊ะกลาง', 'โต๊ะข้าง'],
-  light: ['โคมไฟตั้งพื้น', 'โคมไฟ'],
-  textile: ['พรม', 'ผ้าม่าน'],
-  accent: ['แจกัน', 'ชั้นวางของ'],
-}
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36'
-const IMG = (hash: string) => `https://down-th.img.susercontent.com/file/${hash}`
+const STYLE_WORDS = STYLE_SEARCH_WORDS
+const CAT_WORDS = CATEGORY_SEARCH_WORDS as Record<Cat, string[]>
+const IMG = (hash: string) => shopeeImage(hash)
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-const idOf = (c: {shop: number; item: number}) => `shopee-${c.shop}-${c.item}`
-
-/** Shopee search JSON → candidates. Shopee prices are THB × 100000. */
-export function parseSearch(json: any, hint: string): Candidate[] {
-  if (!Array.isArray(json?.items)) throw new Error(`no items (error=${json?.error ?? 'none'})`)
-  return json.items.flatMap((it: any) => {
-    const b = it?.item_basic
-    if (!b || !Number.isSafeInteger(b.itemid) || !Number.isSafeInteger(b.shopid) || !b.name || !/^[\w-]+$/.test(b.image ?? '')) return []
-    const price = Number(b.price_min ?? b.price) / 100000
-    const rating = Number(b.item_rating?.rating_star)
-    return [{shop: b.shopid, item: b.itemid, title: String(b.name).trim().slice(0, 300), image: b.image,
-      price: price > 0 ? price : null, rating: rating > 0 ? Math.round(rating * 100) / 100 : null,
-      shopName: b.shop_name || null, hints: new Set([hint])}]
-  })
-}
+export {parseSearch}
 
 /** Keep only well-formed keep=true decisions for ids we sent, with ≥1 valid app style. */
 export function cleanDecisions(raw: any, ids: Set<string>): Decision[] {
@@ -66,12 +43,7 @@ export function cleanDecisions(raw: any, ids: Set<string>): Decision[] {
   })
 }
 
-async function search(keyword: string, page: number) {
-  const q = new URLSearchParams({by: 'relevancy', keyword, limit: '60', newest: String(page * 60), order: 'desc', page_type: 'search'})
-  const res = await fetch(`https://shopee.co.th/api/v4/search/search_items?${q}`, {headers: {'user-agent': UA, accept: 'application/json'}})
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json()
-}
+const search = (keyword: string, page: number) => searchShopee(keyword, page)
 
 async function gather(pages: number) {
   const all = new Map<string, Candidate>()

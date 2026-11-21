@@ -1,0 +1,68 @@
+[
+  {
+    "id": "shopee-497840757-51608346951",
+    "title": "FURDINI โต๊ะกลาง  PRIMO 90 ซม. สี NATURAL จัดส่งโดย HomePro",
+    "url": "https://shopee.co.th/product/497840757/51608346951",
+    "price_thb": 890.0,
+    "masks": {
+      "capture": "scenes/muji-6/capture_table.png",
+      "front_of_sofa": "scenes/muji-6/front_of_sofa_table.png",
+      "beside_sofa": "scenes/muji-6/beside_sofa_table.png"
+    }
+  },
+  {
+    "id": "shopee-1712366736-40729807131",
+    "title": "โคมไฟตั้งพื้นสไตล์วาบิซาบิ สไตล์เซนย้อนยุค เหมาะสำหรับห้องนั่งเล่น ห้องทำงาน ห้องนอน โคมไฟข้างเตียง งานศิลปะไม้ไผ่สร้างส",
+    "url": "https://shopee.co.th/product/1712366736/40729807131",
+    "price_thb": 899.0,
+    "masks": {
+      "capture": "scenes/muji-6/capture_lamp.png",
+      "front_of_sofa": "scenes/muji-6/front_of_sofa_lamp.png",
+      "beside_sofa": "scenes/muji-6/beside_sofa_lamp.png"
+    }
+  },
+  {
+    "id": "shopee-1172569160-41108320702",
+    "title": "🌿ต้นไม้ปลอม(ฟรี หินโรย กระถางดอกไม้) 🌿Muaneka ต้นไทรใบสัก 65-150CM 15/23/33/47ใบ ความจำลอง 99% ต้นไม้มงคล สำหรับตกแต่งบ้านและสวน",
+    "url": "https://shopee.co.th/product/1172569160/41108320702",
+    "price_thb": 145.0,
+    "masks": {
+      "capture": "scenes/muji-6/capture_plant.png",
+      "front_of_sofa": "scenes/muji-6/front_of_sofa_plant.png",
+      "beside_sofa": "scenes/muji-6/beside_sofa_plant.png"
+    }
+  },
+  {
+    "id": "shopee-228922246-50062368031",
+    "title": "Evergreen Furniture ชุดโซฟา 3 ที่นั่ง รุ่น D ครบชุด งานไม้ยางพาราประสาน สไตล์มินิมอล",
+    "url": "https://shopee.co.th/product/228922246/50062368031",
+    "price_thb": 19861.0,
+    "masks": {
+      "capture": "scenes/muji-6/capture_sofa.png",
+      "front_of_sofa": "scenes/muji-6/front_of_sofa_sofa.png",
+      "beside_sofa": "scenes/muji-6/beside_sofa_sofa.png"
+    }
+  },
+  {
+    "id": "shopee-166507137-4867794915",
+    "title": "พร้อมส่ง ภาพแต่งห้องมินิมอล ภาพติดผนัง พร้อมกรอบไม้บีช สไตล์ Japandi Minimal Abstract 02 กรอบรูปติดผนัง รูปแต่งบ้าน",
+    "url": "https://shopee.co.th/product/166507137/4867794915",
+    "price_thb": 320.0,
+    "masks": {
+      "capture": "scenes/muji-6/capture_art.png",
+      "front_of_sofa": "scenes/muji-6/front_of_sofa_art.png",
+      "beside_sofa": "scenes/muji-6/beside_sofa_art.png"
+    }
+  },
+  {
+    "id": "shopee-718088315-18547753430",
+    "title": "Silive Shop พรมปูพื้น ผ้าแคชเมียร์เทียม พรมมินิมอล กันน้ำ  rug นุ่ม #GA-C",
+    "url": "https://shopee.co.th/product/718088315/18547753430",
+    "price_thb": 1225.0,
+    "masks": {
+      "capture": "scenes/muji-6/capture_rug.png",
+      "front_of_sofa": "scenes/muji-6/front_of_sofa_rug.png",
+      "beside_sofa": "scenes/muji-6/beside_sofa_rug.png"
+    }
+  }
+]
