@@ -2,7 +2,7 @@
 // HTTP calls to OpenAI, Neon Object Storage through the S3 client, and sharp for pixels. No local tools.
 //
 //   1. photo    the listing's photo from our bucket (listings/<shop>-<item>/original.*), else Shopee's CDN; or the user's upload
-//   2. cutout   image model isolates the product on transparency           cached at listings/<shop>-<item>/cutout.png
+//   2. cutout   image model isolates the product on transparency           cached at listings/<shop>-<item>/cutout-v2.png
 //   3. size     vision model reads the real size in cm                      cached at listings/<shop>-<item>/spec.json
 //   4. place    vision model decides where each product stands and how big it appears in the room photo
 //   5. paste    sharp pastes every cutout at that spot and size
@@ -12,7 +12,7 @@ import 'server-only'
 import sharp from 'sharp'
 import {sniffImage, type RenderImage, type StyleEntry} from '@/lib/live-render-core'
 import {OpenaiRenderError, openaiEdit, openaiJson} from '@/lib/openai-render'
-import {cutoutPrompt, fallbackSize, fitCutout, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
+import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
 import {storage} from '@/lib/storage'
 
 const PHOTO_MAX_BYTES = 8 * 1024 * 1024
@@ -135,15 +135,22 @@ export async function renderPlaced(input: PipelineInput, signal?: AbortSignal): 
     products: prepared.map(p => ({id: p.id, name: p.name, size: p.size, aspect: p.cutout.width / p.cutout.height, hint: p.hint})),
   })
   const views = await Promise.all([input.room, ...input.roomReferences, ...(input.floorPlan ? [input.floorPlan] : [])].map(r => visionCopy(r.image)))
-  let placements = null
-  for (let attempt = 0; attempt < 2 && !placements; attempt++) placements = parsePlacements(await openaiJson({prompt, images: views, signal}), prepared.map(p => p.id))
+  let placements = null, view = null
+  for (let attempt = 0; attempt < 2 && !placements; attempt++) {
+    const answer = await openaiJson({prompt, images: views, signal})
+    placements = parsePlacements(answer, prepared.map(p => p.id))
+    view = parsePerspective(answer)
+  }
   if (!placements) throw new PipelineError('placement_failed')
 
-  // Step 5. Back to front, so nearer products cover further ones.
+  // Step 5. Back to front, so nearer products cover further ones. Sizes come from the camera geometry when it is
+  // consistent (models guess apparent sizes badly, often by half); otherwise the model's own guess is kept.
   const layers = await Promise.all(placements.map(async pl => {
-    const {cutout} = prepared.find(p => p.id === pl.id)!
-    const box = fitCutout(cutout.width, cutout.height, pl, roomW, roomH)
-    return {floorY: pl.floorY, input: await sharp(cutout.png).resize(box.width, box.height).png().toBuffer(), left: box.left, top: box.top}
+    const {cutout, size} = prepared.find(p => p.id === pl.id)!
+    const box = trueBox(cutout.width, cutout.height, pl, size, view, roomW, roomH) ?? fitCutout(cutout.width, cutout.height, pl, roomW, roomH)
+    // a floor covering is squashed onto the floor; everything else keeps its photo's proportions
+    const input = await sharp(cutout.png).resize(box.width, box.height, {fit: 'fill'}).png().toBuffer()
+    return {floorY: pl.floorY, input, left: box.left, top: box.top}
   }))
   const composite = await sharp(room).composite(layers.sort((a, b) => a.floorY - b.floorY)).png().toBuffer()
 

@@ -5,12 +5,16 @@
 //                     → cutouts pasted at true scale → image model relights and adds shadows only.
 // Every model answer below is untrusted: numbers are range-checked and ids are matched before anything uses them.
 
+// Bump when cutoutPrompt changes what it keeps: old cutouts stay cached forever otherwise.
+// v2: rug listings keep the rug, not the chair standing on it.
+const CUTOUT_VERSION = 'v2'
+
 /** Storage keys of a Shopee listing's private AI assets; null for anything that is not a listing id. */
 export function listingKeys(id: string): {cutout: string; spec: string} | null {
   const m = /^shopee-(\d{1,20})-(\d{1,20})$/.exec(id)
   if (!m) return null
   const dir = `listings/${m[1]}-${m[2]}`
-  return {cutout: `${dir}/cutout.png`, spec: `${dir}/spec.json`}
+  return {cutout: `${dir}/cutout-${CUTOUT_VERSION}.png`, spec: `${dir}/spec.json`}
 }
 
 /** Only Shopee's own image CDN: image_url came from scraped data, so never fetch an arbitrary host. */
@@ -122,8 +126,11 @@ export function placementPrompt({roomType, styleTh, widthCm, extraViews, product
     'Decide where each product stands on visible free floor in image 1: arranged the way people actually use this room type, not blocking doors or windows, not overlapping each other, against a wall where that is how it is normally used.',
     'Group products that are used together the way people really use them: a side or coffee table goes beside or in front of the seating, a floor lamp next to the seating or in a corner. Never leave a small item standing alone in the middle of the floor.',
     'Then work out, from the perspective at that exact spot, how large the product appears in image 1 given its real dimensions. Objects further back appear smaller. Be precise: a wrong size is the worst possible error.',
+    'Also measure the camera geometry of image 1, which is used to compute true sizes:',
+    'horizon_y_pct = the eye-level line: the image row where lines that run parallel to the floor and away from the camera (floor planks, skirting boards, the wall-floor and wall-ceiling edges) meet. It is at the camera height above the floor, usually between the top of a door and the floor.',
+    'reference = one upright object standing on the floor with a known real height, preferably an interior door (about 205 cm with its frame): bottom_y_pct where it meets the floor, top_y_pct at its top, measured in image 1.',
     'Return JSON only:',
-    '{"scale_references": [{"object": string, "assumed_cm": number}], "placements": [{"id": string, "center_x_pct": number, "floor_y_pct": number, "width_pct": number, "height_pct": number}], "confidence": "low" | "medium" | "high"}',
+    '{"horizon_y_pct": number, "reference": {"object": string, "assumed_cm": number, "bottom_y_pct": number, "top_y_pct": number} | null, "placements": [{"id": string, "center_x_pct": number, "floor_y_pct": number, "width_pct": number, "height_pct": number}], "confidence": "low" | "medium" | "high"}',
     'center_x_pct = horizontal center of the product\'s footprint, percent of the image width from the left.',
     'floor_y_pct = where the product\'s base meets the floor (its lowest visible point), percent of the image height from the top.',
     'width_pct and height_pct = the product\'s apparent width and height in image 1 at that spot, percent of the image width and height.',
@@ -147,6 +154,69 @@ export function parsePlacements(value: unknown, ids: string[]): Placement[] | nu
     byId.set(r.id, {id: r.id, centerX, floorY, width, height})
   }
   return ids.every(id => byId.has(id)) ? ids.map(id => byId.get(id)!) : null
+}
+
+/** Camera geometry of the room photo, in percent of the image height: enough to turn real cm into pixels on the floor. */
+export type Perspective = {horizonY: number; cameraHeightCm: number}
+const CAMERA_MIN_CM = 40, CAMERA_MAX_CM = 260 // a phone held anywhere from a low crouch to overhead
+
+/**
+ * Model answer → camera height from the reference (similar triangles: an object h cm tall standing at floor row b
+ * spans b - t rows, and the floor row b is (b - horizon) rows below eye level, so camera = h·(b - horizon)/(b - t)).
+ * Null when the geometry is inconsistent; the caller then keeps the model's own apparent sizes.
+ */
+export function parsePerspective(value: unknown): Perspective | null {
+  const v = value as {horizon_y_pct?: unknown; reference?: {assumed_cm?: unknown; bottom_y_pct?: unknown; top_y_pct?: unknown} | null} | null
+  const horizonY = pct(v?.horizon_y_pct, 0), ref = v?.reference
+  const bottom = pct(ref?.bottom_y_pct, 0), top = pct(ref?.top_y_pct, 0)
+  const h = typeof ref?.assumed_cm === 'number' && Number.isFinite(ref.assumed_cm) && ref.assumed_cm >= 30 && ref.assumed_cm <= 400 ? ref.assumed_cm : null
+  if (horizonY === null || bottom === null || top === null || h === null || bottom <= horizonY || bottom <= top) return null
+  const cameraHeightCm = h * (bottom - horizonY) / (bottom - top)
+  return cameraHeightCm >= CAMERA_MIN_CM && cameraHeightCm <= CAMERA_MAX_CM ? {horizonY, cameraHeightCm} : null
+}
+
+// Floor coverings are measured by their footprint, not their few-millimetre height.
+const FLAT_CM = 5
+// Typical phone main camera, horizontal field of view: only used to foreshorten floor coverings.
+const ASSUMED_HFOV_DEG = 70
+// A product photo is rarely taken straight from the front: its box may show a top or a side as well, so the
+// secondary dimension may exceed the true one by this much before it starts limiting the size.
+const SIDE_ALLOWANCE = 1.6
+
+export type Box = {left: number; top: number; width: number; height: number; stretch?: boolean}
+
+/**
+ * Pixel box at TRUE size for a cutout standing at a floor spot, from the camera geometry. On a level camera a
+ * floor point (floorY - horizonY) rows below eye level is seen at (floorY - horizonY)/cameraHeight rows per cm.
+ * - Upright products are scaled by their larger real dimension (height for a lamp, width for a sofa), because the
+ *   product photo's own angle adds a top or a side to the other one; that one is only capped, never fitted.
+ * - Floor coverings lie on the floor: their near edge is at floorY and their far edge at the row of a floor point
+ *   depth cm further away, so they come out wide and flat instead of standing up like a poster.
+ * Null without usable geometry (or a spot at/above the horizon): the caller keeps the model's apparent size.
+ */
+export function trueBox(cutW: number, cutH: number, p: Placement, size: ProductSize, view: Perspective | null, roomW: number, roomH: number): Box | null {
+  if (!view || p.floorY <= view.horizonY || cutW <= 0 || cutH <= 0) return null
+  const below = (p.floorY - view.horizonY) / 100 * roomH // rows from eye level down to the floor spot
+  const pxPerCm = below / view.cameraHeightCm
+  let width: number, height: number, stretch = false
+  if (size.heightCm < FLAT_CM) {
+    const focal = roomW / 2 / Math.tan(ASSUMED_HFOV_DEG * Math.PI / 360)
+    const near = focal * view.cameraHeightCm / below // cm from the camera to the near edge
+    const farBelow = focal * view.cameraHeightCm / (near + (size.depthCm ?? size.widthCm))
+    width = size.widthCm * pxPerCm
+    height = Math.max(2, below - farBelow)
+    stretch = true
+  } else {
+    const wantW = size.widthCm * pxPerCm, wantH = size.heightCm * pxPerCm
+    let k = size.heightCm >= size.widthCm ? wantH / cutH : wantW / cutW
+    k = Math.min(k, wantW * SIDE_ALLOWANCE / cutW, wantH * SIDE_ALLOWANCE / cutH)
+    width = cutW * k; height = cutH * k
+  }
+  // never larger than the photo, kept inside it, standing on its floor line
+  const shrink = Math.min(1, roomW / width, roomH / height)
+  width = Math.max(1, Math.round(width * shrink)); height = Math.max(1, Math.round(height * shrink))
+  const clamp = (v: number, max: number) => Math.min(Math.max(0, Math.round(v)), max)
+  return {left: clamp((p.centerX / 100) * roomW - width / 2, roomW - width), top: clamp((p.floorY / 100) * roomH - height, roomH - height), width, height, stretch}
 }
 
 /**
