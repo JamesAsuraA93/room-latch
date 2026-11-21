@@ -5,13 +5,13 @@ import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {readFileSync} from 'node:fs'
 import pg from 'pg'
-import {purgeExpiredJobs, readJob, recommendLimits, renderPath, reserveJob, reserveModelCall, settleJob} from '../lib/render-jobs.ts'
+import {beatJob, purgeExpiredJobs, readJob, recommendLimits, renderPath, reserveJob, reserveModelCall, settleJob} from '../lib/render-jobs.ts'
 
 const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL
 if (!url) { console.log('render-jobs skipped: DATABASE_URL_UNPOOLED or DATABASE_URL is not set'); process.exit(0) }
 
 // The migration carries its own begin/commit; they must not end our transaction.
-const migration = ['002-render-jobs.sql', '005-recommend-calls.sql']
+const migration = ['002-render-jobs.sql', '005-recommend-calls.sql', '006-render-heartbeat.sql']
   .map(f => readFileSync(new URL(`../db/migrations/${f}`, import.meta.url), 'utf8').replace(/^\s*(begin|commit)\s*;\s*$/gim, '')).join('\n')
 assert.doesNotMatch(migration, /\b(commit|rollback|begin)\b/i)
 
@@ -53,6 +53,18 @@ try {
   await sql.query(`update render_jobs set started_at = now() - interval '10 minutes' where id = $1`, [b1])
   assert.deepEqual({...(await readJob(b1, sql)), startedAt: 0}, {id: b1, status: 'failed', startedAt: 0, error: 'timeout'})
   assert.equal(await reserveJob(c1, 'b', {perClient: 9, total: 9}, sql), null)
+
+  // a server that dies mid-job stops beating: after LOST_AFTER_SECONDS its caller may start again, long before the 6 minute cap
+  const [d1, d2] = [randomUUID(), randomUUID()]
+  assert.equal(await reserveJob(d1, 'd', {perClient: 9, total: 99}, sql), null)
+  assert.equal(await reserveJob(d2, 'd', {perClient: 9, total: 99}, sql), 'job_in_progress')
+  await sql.query(`update render_jobs set heartbeat_at = now() - interval '1 minute' where id = $1`, [d1])
+  assert.equal((await readJob(d1, sql))?.status, 'failed')
+  await beatJob(d1, sql) // a live instance beating again revives it
+  assert.equal((await readJob(d1, sql))?.status, 'running')
+  assert.equal(await reserveJob(d2, 'd', {perClient: 9, total: 99}, sql), 'job_in_progress')
+  await sql.query(`update render_jobs set heartbeat_at = now() - interval '1 minute' where id = $1`, [d1])
+  assert.equal(await reserveJob(d2, 'd', {perClient: 9, total: 99}, sql), null)
 
   // ids come from the URL: junk never reaches a uuid column
   assert.equal(await readJob('nope', sql), null)

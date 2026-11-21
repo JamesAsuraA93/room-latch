@@ -10,6 +10,12 @@ type Env = Record<string, string | undefined>
 
 /** A running row older than this lost its instance (the OpenAI call itself is capped well below it). */
 export const STALE_AFTER_SECONDS = 6 * 60
+/** The instance running a job refreshes heartbeat_at this often (live-render-openai.ts). */
+export const HEARTBEAT_SECONDS = 10
+/** A running row that has not beaten for this long lost its server (crash, restart, deploy): it stops blocking. */
+export const LOST_AFTER_SECONDS = 45
+// Either rule marks a running row dead: no recent heartbeat, or older than any job can run.
+const DEAD = `(heartbeat_at < now() - make_interval(secs => ${LOST_AFTER_SECONDS}) or started_at < now() - make_interval(secs => ${STALE_AFTER_SECONDS}))`
 const RETENTION = `interval '24 hours'`
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -33,10 +39,10 @@ export async function reserveJob(id: string, clientKey: string, limits: Limits, 
   const {rows: [used]} = await sql.query<{mine: number; total: number; running: number}>(
     `select count(*) filter (where client_key = $1)::int as mine,
             count(*)::int as total,
-            count(*) filter (where client_key = $1 and status = 'running' and started_at > now() - make_interval(secs => $2))::int as running
+            count(*) filter (where client_key = $1 and status = 'running' and not ${DEAD})::int as running
        from render_jobs
       where status <> 'failed' and started_at > now() - ${RETENTION}`,
-    [clientKey, STALE_AFTER_SECONDS])
+    [clientKey])
   if (used.running) return 'job_in_progress'
   if (used.mine >= limits.perClient) return 'rate_limited'
   if (used.total >= limits.total) return 'daily_cap_reached'
@@ -76,9 +82,9 @@ export async function readJob(id: string, sql: Sql = db()): Promise<StoredJob | 
   if (!UUID.test(id)) return null
   const {rows: [row]} = await sql.query(
     `select status, error, output_path, image_w, image_h, bytes, started_at, finished_at,
-            (status = 'running' and started_at < now() - make_interval(secs => $2)) as stale
+            (status = 'running' and ${DEAD}) as stale
        from render_jobs where id = $1`,
-    [id, STALE_AFTER_SECONDS])
+    [id])
   if (!row) return null
   const startedAt = new Date(row.started_at).getTime()
   // The instance running it is gone (crash, deploy, platform timeout): report it failed instead of running forever.
@@ -103,6 +109,12 @@ export async function settleJob(id: string, outcome: Outcome, sql: Sql = db()): 
       where id = $1 and status = 'running'`,
     [id, outcome.status, outcome.status === 'succeeded' ? null : outcome.error.slice(0, 80), output?.path ?? null, output?.width ?? null, output?.height ?? null, output?.bytes ?? null])
   return rowCount === 1
+}
+
+/** Keep a running job alive. Called on an interval by the instance doing the work; a no-op once the job ended. */
+export async function beatJob(id: string, sql: Sql = db()): Promise<void> {
+  if (!UUID.test(id)) return
+  await sql.query(`update render_jobs set heartbeat_at = now() where id = $1 and status = 'running'`, [id])
 }
 
 /** Drop jobs past retention and return the storage paths of their images, for the caller to delete. */

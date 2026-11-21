@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto'
 import {waitUntil} from '@vercel/functions'
 import {OUTPUT_MAX_BYTES, pngSize, type Job, type JobImage, type StartResult} from '@/lib/live-render-core'
 import {OpenaiRenderError} from '@/lib/openai-render'
-import {purgeExpiredJobs, readJob, renderLimits, renderPath, reserveJob, settleJob, type Outcome} from '@/lib/render-jobs'
+import {HEARTBEAT_SECONDS, beatJob, purgeExpiredJobs, readJob, renderLimits, renderPath, reserveJob, settleJob, type Outcome} from '@/lib/render-jobs'
 import {PipelineError, renderPlaced, type PipelineInput} from '@/lib/render-pipeline'
 import {storage} from '@/lib/storage'
 
@@ -31,6 +31,8 @@ async function render(id: string, input: PipelineInput): Promise<Outcome> {
   aborts.set(id, abort)
   let timedOut = false
   const timer = setTimeout(() => { timedOut = true; abort.abort() }, TIMEOUT_MS)
+  // While this instance lives the row keeps beating; if it dies mid-job the caller is unblocked within LOST_AFTER_SECONDS.
+  const heartbeat = setInterval(() => { beatJob(id).catch(logged('render heartbeat failed')) }, HEARTBEAT_SECONDS * 1000)
   let png: Buffer
   try {
     png = await renderPlaced(input, abort.signal)
@@ -39,6 +41,7 @@ async function render(id: string, input: PipelineInput): Promise<Outcome> {
     return {status: 'failed', error: timedOut ? 'timeout' : errorCode(e)}
   } finally {
     clearTimeout(timer)
+    clearInterval(heartbeat)
     aborts.delete(id)
   }
   const size = pngSize(png.subarray(0, 24))

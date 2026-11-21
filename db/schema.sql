@@ -160,6 +160,7 @@ create table render_jobs (
   bytes        integer check (bytes > 0),
   started_at   timestamptz not null default now(),
   finished_at  timestamptz,
+  heartbeat_at timestamptz not null default now(), -- refreshed while the job's instance is alive
   check (status <> 'succeeded' or (output_path is not null and image_w is not null and image_h is not null and bytes is not null)),
   check ((status = 'running') = (finished_at is null))
 );
