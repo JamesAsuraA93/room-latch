@@ -56,11 +56,13 @@ create table shopee_listings (
   source          text not null constraint shopee_listings_source_check check (source in ('snapshot', 'addition', 'exact_match', 'search')),
   shown_in_rooms  text[] not null default '{}',  -- exact matches shown on these room types
   checked_on      date not null,
-  -- source 'search' rows only (scripts/gather-shopee.mts); image_url links Shopee's CDN, no photo is stored
+  -- source 'search' rows only (scripts/gather-shopee.mts); image_url links Shopee's CDN
   image_url       text,
   price_thb       numeric(12, 2),
   shop_name       text,
   rating          real,
+  -- private bucket copy for the AI pipeline only (scripts/copy-listing-images.mts); never served to users
+  image_path      text constraint shopee_listings_image_path_check check (image_path ~ '^listings/[0-9]+-[0-9]+/original\.(jpg|png|webp)$'),
   unique (shop_id, item_id),
   check (id = 'shopee-' || shop_id || '-' || item_id)
 );
