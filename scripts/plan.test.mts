@@ -4,6 +4,7 @@ import {existsSync, readFileSync} from 'node:fs'
 import {parseCsv, toProducts, pickSet, fits, minimalSwap, noFitHint, type Product} from '../lib/plan.ts'
 import {FIXTURES, isFixture} from '../lib/fixtures.ts'
 import {EXACT_LISTINGS, exactFor} from '../lib/listings.ts'
+import {STYLE_IDS} from '../lib/styles.ts'
 
 const catalog = toProducts(parseCsv(readFileSync(new URL('../catalog/products.csv', import.meta.url), 'utf8')))
 assert.equal(catalog.length, 50)
@@ -61,11 +62,8 @@ for (const l of EXACT_LISTINGS) {
 assert.equal(exactFor('condo').length, 1)
 
 // regression: ทุกสไตล์ที่ UI เลือกได้ ต้องมีชุดเริ่มต้นที่ลงงบ/มุมค่าเริ่มต้น และครบ โต๊ะ เก้าอี้ ไฟ
-const demoSrc = readFileSync(new URL('../lib/demo.ts', import.meta.url), 'utf8')
-const styleIds = [...demoSrc.slice(demoSrc.indexOf('export const STYLES'), demoSrc.indexOf('] as const')).matchAll(/id: '(\w+)'/g)].map(m => m[1])
-assert.equal(styleIds.length, 8)
 const DEFAULT = {roomType: 'condo', budget: 5000, width: 80}
-for (const style of styleIds) {
+for (const style of STYLE_IDS) {
   const input = {...DEFAULT, style}
   const set = pickSet(all, input)
   const label = `${style}: ${set.items.map(p => `${p.name} ${p.priceMax}`).join(', ')} = ${set.total}/${set.floorWidth}cm`

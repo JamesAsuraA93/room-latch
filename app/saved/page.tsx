@@ -6,8 +6,8 @@ import {useRouter} from 'next/navigation'
 import {Bookmark, Trash2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {baht, t} from '@/lib/copy'
-import {EMPTY_SOCIAL, PLACEMENT_KEY, readDrafts, readSocial, roomName, savePlan, styleName, writeDrafts, writeSocial, type Draft, type FeedPost, type Social} from '@/lib/demo'
-import {useFeedPosts} from '@/lib/use-feed'
+import {readDrafts, roomName, savePlan, styleName, writeDrafts, writePlacement, type Draft, type FeedPost} from '@/lib/demo'
+import {useFeedPosts, useSocial} from '@/lib/use-feed'
 
 function Row({post, children}: {post: FeedPost; children?: React.ReactNode}) {
   return (
@@ -27,14 +27,14 @@ function Row({post, children}: {post: FeedPost; children?: React.ReactNode}) {
 export default function Saved() {
   const router = useRouter()
   const [drafts, setDrafts] = useState<Draft[]>([])
-  const [social, setSocial] = useState<Social>(EMPTY_SOCIAL)
+  const [social, setSocial] = useSocial()
   const {posts: feed} = useFeedPosts()
-  useEffect(() => { setDrafts(readDrafts()); setSocial(readSocial()) }, [])
+  useEffect(() => setDrafts(readDrafts()), [])
 
   function open(d: Draft) {
     // draft ไม่ใช่ Remix และไม่รู้ว่ารูปห้องตอนนี้เป็นรูปตัวอย่างไหม ใช้สถานะรูปของแท็บนี้แทน
     savePlan({style: d.plan.style, roomType: d.plan.roomType, budget: d.plan.budget, width: d.plan.width, remixOf: undefined})
-    try { sessionStorage.setItem(PLACEMENT_KEY, JSON.stringify({pos: {}, photos: {}, locked: d.locked})) } catch {}
+    writePlacement({pos: {}, photos: {}, locked: d.locked})
     router.push('/result')
   }
   function remove(id: string) {
@@ -42,8 +42,7 @@ export default function Saved() {
     setDrafts(next); writeDrafts(next)
   }
   function unsave(id: string) {
-    const next = {...social, saves: social.saves.filter(x => x !== id)}
-    setSocial(next); writeSocial(next)
+    setSocial({...social, saves: social.saves.filter(x => x !== id)})
   }
 
   const savedRooms = [...social.posts, ...feed].filter(p => social.saves.includes(p.id))

@@ -4,10 +4,9 @@ import Link from 'next/link'
 import {usePathname} from 'next/navigation'
 import {Bookmark, Home, Sparkles, User} from 'lucide-react'
 import {t} from '@/lib/copy'
+import {LAST_DESIGN_KEY} from '@/lib/storage-keys'
 
 const DESIGN = ['/upload', '/style', '/setup', '/loading', '/result']
-// ขั้นล่าสุดของการแต่งห้องในแท็บนี้: กดแท็บ "แต่งห้อง" แล้วกลับมาที่เดิม ไม่เริ่มใหม่ (draft อยู่ใน sessionStorage อยู่แล้ว)
-const LAST_DESIGN_KEY = 'room-ai-last-design'
 
 const TABS = [
   {href: '/', label: t.tabFeed, icon: Home, match: ['/']},
@@ -20,6 +19,7 @@ export function TabBar() {
   const path = usePathname()
   const [designHref, setDesignHref] = useState('/upload')
   useEffect(() => {
+    // LAST_DESIGN_KEY = ขั้นล่าสุดของการแต่งห้องในแท็บนี้: กดแท็บ "แต่งห้อง" แล้วกลับมาที่เดิม ไม่เริ่มใหม่ (draft อยู่ใน sessionStorage อยู่แล้ว)
     try {
       // /loading ยิง /api/render ซ้ำ จึงจำเป็น /setup แทน
       if (DESIGN.includes(path)) sessionStorage.setItem(LAST_DESIGN_KEY, path === '/loading' ? '/setup' : path)

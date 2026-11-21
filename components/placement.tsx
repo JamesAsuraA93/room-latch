@@ -1,7 +1,7 @@
 'use client'
 import {useRef, useState} from 'react'
 import {demoProductImage, type Pos} from '@/lib/demo'
-import {EXACT_POS} from '@/components/room-compare'
+import {EXACT_POS, defaultPos} from '@/components/room-compare'
 import {resizeRoomImage} from '@/lib/image'
 import {t} from '@/lib/copy'
 import {Button} from '@/components/ui/button'
@@ -13,7 +13,6 @@ type Item = {id: string; name: string; image?: string}
 const DEMO_BADGE = 'demo'
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
-const defaultPos = (i: number, n: number): Pos => ({x: n > 1 ? 4 + (i * 68) / (n - 1) : 36, y: 46 + (i % 2) * 5, w: 26})
 
 export function Placement({roomImage, items, value, onChange}: {roomImage: string; items: Item[]; value: Value; onChange: (v: Value) => void}) {
   const frame = useRef<HTMLDivElement>(null)

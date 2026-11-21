@@ -3,15 +3,15 @@
 import {randomUUID} from 'node:crypto'
 import {NextResponse} from 'next/server'
 import {db} from '@/lib/db'
+import {isLoopbackHost} from '@/lib/live-render-core'
 import {storage} from '@/lib/storage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?$/i
 
 export async function POST(req: Request) {
   const host = req.headers.get('host') ?? ''
-  if (process.env.VERCEL || !LOOPBACK.test(host) || req.headers.get('origin') !== `http://${host}`) return new Response(null, {status: 403})
+  if (process.env.VERCEL || !isLoopbackHost(host) || req.headers.get('origin') !== `http://${host}`) return new Response(null, {status: 403})
 
   const result: Record<string, unknown> = {}
   try {

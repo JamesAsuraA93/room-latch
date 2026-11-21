@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {parseCsv} from '../lib/plan.ts'
 import {REAL_CATEGORIES, STYLE_ALIAS, mergeReal, toRealProducts} from '../lib/real-catalog.ts'
+import {STYLE_IDS} from '../lib/styles.ts'
 import {EXAMPLE_POSTS} from '../lib/feed-examples.ts'
 
 const rows = parseCsv(readFileSync(new URL('../catalog/shopee-real-snapshot.csv', import.meta.url), 'utf8'))
@@ -59,8 +60,7 @@ assert.equal(all.length, 50)
 assert.equal(mergeReal(real, add, add, real).length, 50, 'merge dedups by shop/item')
 
 // coverage: all 8 app styles get real products in several categories (snapshot + additions)
-const APP_STYLES = ['minimal', 'muji', 'japandi', 'scandi', 'loft', 'luxe', 'boho', 'nordic']
-for (const s of APP_STYLES) {
+for (const s of STYLE_IDS) {
   const list = all.filter(p => p.styles.includes(s))
   const cats = new Set(list.map(p => p.category))
   console.log(`${s}: ${list.length} products, ${cats.size}/${REAL_CATEGORIES.length} categories`)

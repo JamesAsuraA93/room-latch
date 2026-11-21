@@ -1,8 +1,8 @@
 'use client'
 import {useEffect, useState} from 'react'
-import {FEED, type FeedPost} from '@/lib/demo'
+import {EMPTY_SOCIAL, FEED, readSocial, writeSocial, type FeedPost, type Social} from '@/lib/demo'
 
-export type FeedStatus = 'loading' | 'ready' | 'error'
+type FeedStatus = 'loading' | 'ready' | 'error'
 
 // Team posts from /api/feed (Neon). While loading, callers show skeletons; if it fails/returns none, use the labelled examples.
 export function useFeedPosts(): {posts: FeedPost[]; status: FeedStatus} {
@@ -15,4 +15,11 @@ export function useFeedPosts(): {posts: FeedPost[]; status: FeedStatus} {
     return () => { live = false }
   }, [])
   return state
+}
+
+// ไลก์ เซฟ และโพสต์ของเครื่องนี้ (localStorage) อ่านหลัง mount เพราะฝั่ง server ไม่มี localStorage
+export function useSocial(): [Social, (next: Social) => void] {
+  const [social, setSocial] = useState<Social>(EMPTY_SOCIAL)
+  useEffect(() => setSocial(readSocial()), [])
+  return [social, next => { setSocial(next); writeSocial(next) }]
 }

@@ -4,7 +4,7 @@ import Image from 'next/image'
 import {Bookmark, Heart, ImageOff, Shuffle, Trash2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Skeleton} from '@/components/ui/skeleton'
-import {SHOPEE_SEARCH, roomName, styleName, type FeedPost} from '@/lib/demo'
+import {roomName, shopeeSearchUrl, styleName, type FeedPost} from '@/lib/demo'
 import {baht, t} from '@/lib/copy'
 
 type Props = {post: FeedPost; liked: boolean; saved: boolean; onLike: () => void; onSave: () => void; onRemix: () => void; onRemove?: () => void}
@@ -87,7 +87,7 @@ export function FeedCard({post, liked, saved, onLike, onSave, onRemix, onRemove}
         <ul className="space-y-1.5">
           {post.items.map(item => (
             <li key={item.name}>
-              <a href={item.url ?? `${SHOPEE_SEARCH}${encodeURIComponent(item.keyword ?? item.name)}`} target="_blank" rel="noopener noreferrer"
+              <a href={item.url ?? shopeeSearchUrl(item.keyword ?? item.name)} target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-between gap-3 rounded-2xl bg-zinc-50 px-3 py-2.5">
                 <span className="min-w-0">
                   <span className="line-clamp-2 block text-sm font-medium text-zinc-900">{item.name}</span>

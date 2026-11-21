@@ -5,7 +5,8 @@ import {useRouter} from 'next/navigation'
 import {Button} from '@/components/ui/button'
 import {Skeleton} from '@/components/ui/skeleton'
 import {t} from '@/lib/copy'
-import {RENDER_KEY, readPlacement, readPlan, writeJson} from '@/lib/demo'
+import {readPlacement, readPlan, writeJson} from '@/lib/demo'
+import {RENDER_KEY} from '@/lib/storage-keys'
 const TIMEOUT_MS = 5000
 
 // ส่งเฉพาะ metadata (สไตล์ ห้อง งบ ขนาด ตำแหน่งของ) ไป /api/render ไม่มีรูป

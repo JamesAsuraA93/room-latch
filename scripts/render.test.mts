@@ -1,7 +1,6 @@
 // รัน: node scripts/render.test.mts
 import assert from 'node:assert/strict'
-import {readFileSync} from 'node:fs'
-import {RENDER_STYLES, RENDER_ROOM_TYPES, parseRenderBody, validateRenderInput, mockRender, jobIdFor, type RenderInput} from '../lib/render.ts'
+import {parseRenderBody, validateRenderInput, mockRender, jobIdFor, type RenderInput} from '../lib/render.ts'
 
 const ok: RenderInput = {styleId: 'japandi', roomType: 'condo', budget: 5000, width: 80, items: [{id: 'desk-1', x: 10, y: 50, w: 40}, {id: 'lamp_2', x: 0, y: 100, w: 12.5}]}
 const code = (body: unknown) => { const r = validateRenderInput(body); assert.equal(r.ok, false, JSON.stringify(body)); return r.ok ? '' : r.error.code }
@@ -45,11 +44,4 @@ assert.equal(code([ok]), 'bad_json')
 assert.equal(code(null), 'bad_json')
 const empty = parseRenderBody(''); assert.ok(!empty.ok && empty.error.code === 'bad_json' && empty.error.status === 400)
 const big = parseRenderBody(JSON.stringify({...ok, pad: 'x'.repeat(17000)})); assert.ok(!big.ok && big.error.status === 413)
-
-// allowlists match the UI (same parse as plan.test.mts)
-const demoSrc = readFileSync(new URL('../lib/demo.ts', import.meta.url), 'utf8')
-const styleIds = [...demoSrc.slice(demoSrc.indexOf('export const STYLES'), demoSrc.indexOf('] as const')).matchAll(/id: '(\w+)'/g)].map(m => m[1])
-assert.deepEqual([...RENDER_STYLES], styleIds)
-const rooms = demoSrc.match(/export const ROOM_TYPES = \[([^\]]*)\]/)![1].match(/'(\w+)'/g)!.map(s => s.slice(1, -1))
-assert.deepEqual([...RENDER_ROOM_TYPES], rooms)
 console.log('render ok')

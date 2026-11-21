@@ -3,11 +3,11 @@ import {useEffect, useRef, useState} from 'react'
 import {X} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {baht, fill, t} from '@/lib/copy'
-import {SHOPEE_SEARCH, demoProductImage, type Pos} from '@/lib/demo'
+import {demoProductImage, shopeeSearchUrl, type Pos} from '@/lib/demo'
 import type {ExactListing} from '@/lib/listings'
 import type {Product} from '@/lib/plan'
 
-// ต้องตรงกับ defaultPos ใน placement.tsx เพื่อให้โหมดดูกับโหมดแก้ไขวางของที่เดียวกัน
+// ใช้ร่วมกับ placement.tsx เพื่อให้โหมดดูกับโหมดแก้ไขวางของที่เดียวกัน
 export const defaultPos = (i: number, n: number): Pos => ({x: n > 1 ? 4 + (i * 68) / (n - 1) : 36, y: 46 + (i % 2) * 5, w: 26})
 export const EXACT_POS: Pos = {x: 34, y: 4, w: 34} // ประกาศจริงวางมุมบนขวา (โต๊ะ/ริมหน้าต่าง) ไม่ทับชุดจาก catalog
 const HIGHLIGHT_MS = 4500
@@ -26,7 +26,7 @@ function shownItems(items: Product[], exacts: ExactListing[], photos: Record<str
       id: p.id, name: p.name, image: photos[p.id] ?? demoProductImage(p.name),
       kind: custom ? 'custom' : user ? 'user' : 'demo',
       price: custom ? baht(p.priceMax) : `${t.approx} ${baht(p.priceMin)}–${baht(p.priceMax)}${p.deeplink ? ` · ${t.samplePriceNote}` : ''}`,
-      link: custom ? {href: p.deeplink, label: t.openYourListing} : p.deeplink ? {href: p.deeplink, label: t.openExact} : user ? null : {href: `${SHOPEE_SEARCH}${encodeURIComponent(p.keyword)}`, label: t.searchKeyword},
+      link: custom ? {href: p.deeplink, label: t.openYourListing} : p.deeplink ? {href: p.deeplink, label: t.openExact} : user ? null : {href: shopeeSearchUrl(p.keyword), label: t.searchKeyword},
     }
   })
   const fromListings = exacts.map((l): Shown => ({id: l.id, name: l.title, image: l.image ?? demoProductImage(l.title), hasPhoto: !!l.image, kind: 'exact', price: null, link: {href: l.url, label: t.openExact}, matchedAt: l.matchedAt, cutout: l.image ? l.cutout : undefined}))

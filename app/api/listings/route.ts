@@ -1,14 +1,14 @@
 // GET /api/listings?style=japandi — real Shopee listings for a style, read from Neon Postgres.
 import {NextResponse} from 'next/server'
 import {listingsForStyle} from '@/lib/db'
-import {APP_STYLES} from '@/lib/real-catalog'
+import {isStyleId} from '@/lib/styles'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: Request) {
   const style = new URL(req.url).searchParams.get('style') ?? ''
-  if (!APP_STYLES.includes(style)) return NextResponse.json({error: 'unknown style'}, {status: 400})
+  if (!isStyleId(style)) return NextResponse.json({error: 'unknown style'}, {status: 400})
   try {
     const listings = await listingsForStyle(style)
     return NextResponse.json({style, count: listings.length, listings})

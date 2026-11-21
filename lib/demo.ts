@@ -1,34 +1,41 @@
 import {t} from '@/lib/copy'
 import {EXAMPLE_POSTS} from '@/lib/feed-examples'
+import type {Product} from '@/lib/plan'
+import {DRAFTS_KEY, PLACEMENT_KEY, PLAN_KEY, PRODUCT_RENDER_KEY, RENDER_KEY, ROOM_IMAGE_KEY, ROOM_IMAGES_KEY, SOCIAL_KEY, STYLE_REFERENCE_KEY} from '@/lib/storage-keys'
+import {ROOM_TYPE_IDS, STYLE_IDS, type StyleId} from '@/lib/styles'
 
 const u = (id: string, w = 800) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=75`
 
 export const BEFORE = u('photo-1522708323590-d24dbb6b0267', 1000)
-export const ROOM_IMAGE_KEY = 'room-ai-photo'
-export const PLAN_KEY = 'room-ai-plan'
-export const SHOPEE_SEARCH = 'https://shopee.co.th/search?keyword='
+/** หน้าค้นหา Shopee ตามคำค้น (ไม่ใช่ประกาศเฉพาะชิ้น) */
+export const shopeeSearchUrl = (keyword: string) => `https://shopee.co.th/search?keyword=${encodeURIComponent(keyword)}`
 
-// key ตรงกับคอลัมน์ styles ใน catalog/products.csv รูปคือภาพตัวอย่างสไตล์ ใช้เป็น "หลังแต่ง" ตอนยังไม่ได้ต่อ AI
-export const STYLES = [
-  {id: 'minimal', name: t.minimal, image: 'photo-1600210492486-724fe5c67fb0'},
-  {id: 'muji', name: t.muji, image: 'photo-1600607687939-ce8a6c25118c'},
-  {id: 'japandi', name: t.japandi, image: 'photo-1616486338812-3dadae4b4ace'},
-  {id: 'scandi', name: t.scandi, image: 'photo-1615874694520-474822394e73'},
-  {id: 'loft', name: t.loft, image: 'photo-1600566753190-17f0baa2a6c3'},
-  {id: 'luxe', name: t.luxe, image: 'photo-1600607687920-4e2a09cf159d'},
-  {id: 'boho', name: t.boho, image: 'photo-1618221195710-dd6b41faaea6'},
-  {id: 'nordic', name: t.nordic, image: 'photo-1600210491892-03d54c0aaf87'},
-] as const
+// รูปคือภาพตัวอย่างสไตล์ ใช้เป็น "หลังแต่ง" ตอนยังไม่ได้ต่อ AI
+// Record<StyleId> = ขาดหรือเกินจาก STYLE_IDS (lib/styles.ts) แล้ว compile ไม่ผ่าน
+const STYLE_IMAGES: Record<StyleId, string> = {
+  minimal: 'photo-1600210492486-724fe5c67fb0',
+  muji: 'photo-1600607687939-ce8a6c25118c',
+  japandi: 'photo-1616486338812-3dadae4b4ace',
+  scandi: 'photo-1615874694520-474822394e73',
+  loft: 'photo-1600566753190-17f0baa2a6c3',
+  luxe: 'photo-1600607687920-4e2a09cf159d',
+  boho: 'photo-1618221195710-dd6b41faaea6',
+  nordic: 'photo-1600210491892-03d54c0aaf87',
+}
+export const STYLES = STYLE_IDS.map(id => ({id, name: t[id], image: STYLE_IMAGES[id]}))
 export const styleImage = (id: string, w = 1000) => u(STYLES.find(s => s.id === id)?.image ?? STYLES[0].image, w)
 export const styleName = (id: string) => STYLES.find(s => s.id === id)?.name ?? id
 
-export const ROOM_TYPES = ['condo', 'bedroom', 'living', 'empty', 'cluttered'] as const
+export const ROOM_TYPES = ROOM_TYPE_IDS
 export const roomName = (id: string) => (t as Record<string, string>)[id] ?? id
 
 /** สิ่งที่ผู้ใช้เลือกตลอด flow เก็บใน sessionStorage */
 export type Plan = {style: string; roomType: string; budget: number; width: number; sample?: boolean; remixOf?: string}
 // ค่าเริ่มต้นคือสถานการณ์เดโม: มุมทำงานคอนโด 80 ซม. งบ 5,000
 export const DEFAULT_PLAN: Plan = {style: 'japandi', roomType: 'condo', budget: 5000, width: 80}
+// ปุ่มค่าลัดของช่องงบ/ความกว้าง ใช้ทั้งหน้าตั้งค่าและหน้าผลลัพธ์
+export const BUDGET_PRESETS = [3500, 5000, 10000]
+export const WIDTH_PRESETS = [60, 80, 120]
 
 export function readJson<T>(store: 'session' | 'local', key: string, fallback: T): T {
   try {
@@ -49,12 +56,12 @@ export const savePlan = (p: Partial<Plan>) => writeJson('session', PLAN_KEY, {..
  */
 export function startDemoSession() {
   writeJson('session', PLAN_KEY, {...DEFAULT_PLAN, sample: true})
-  writeJson('session', PLACEMENT_KEY, {pos: {}, photos: {}, locked: []})
-  try { sessionStorage.removeItem(RENDER_KEY); sessionStorage.removeItem('room-ai-photos'); sessionStorage.removeItem('room-ai-style-reference'); sessionStorage.removeItem('room-ai-product-render') } catch {}
+  writePlacement(EMPTY_PLACEMENT)
+  try { for (const key of [RENDER_KEY, ROOM_IMAGES_KEY, STYLE_REFERENCE_KEY, PRODUCT_RENDER_KEY]) sessionStorage.removeItem(key) } catch {}
   try { sessionStorage.setItem(ROOM_IMAGE_KEY, BEFORE) } catch {}
 }
 
-export type FeedItem = {name: string; priceRange?: string; keyword?: string; url?: string} // url = exact listing (no price shown)
+type FeedItem = {name: string; priceRange?: string; keyword?: string; url?: string} // url = exact listing (no price shown)
 
 export type FeedPost = {
   id: string
@@ -79,18 +86,12 @@ export const FEED: FeedPost[] = EXAMPLE_POSTS.map(p => ({
 }))
 
 // ฟีดบนเครื่องนี้: ไลก์ เซฟ และโพสต์ที่ผู้ใช้กดแชร์เอง ทั้งหมดอยู่ใน localStorage ไม่มีการส่งออกไปไหน
-export const SOCIAL_KEY = 'room-ai-social'
 export type Social = {likes: string[]; saves: string[]; posts: FeedPost[]}
 export const EMPTY_SOCIAL: Social = {likes: [], saves: [], posts: []}
 export const readSocial = () => readJson<Social>('local', SOCIAL_KEY, EMPTY_SOCIAL)
 export const writeSocial = (s: Social) => writeJson('local', SOCIAL_KEY, s)
 
 // ---- Placement (product first): วางรูปสินค้าบนรูปห้องของผู้ใช้ ทั้งหมดอยู่ในแท็บนี้ ไม่ส่งรูปออก ----
-import type {Product} from '@/lib/plan'
-
-export const PLACEMENT_KEY = 'room-ai-placement'
-// ผลจาก /api/render ล่าสุด (provider, jobId) ไม่มีรูป
-export const RENDER_KEY = 'room-ai-render'
 export type Pos = {x: number; y: number; w: number} // เปอร์เซ็นต์ของกรอบรูปห้อง (มุมซ้ายบน, ความกว้าง)
 // set = id ของชุดปัจจุบัน (หลังกดปรับงบ/ขนาด) เพื่อให้เปลี่ยนเฉพาะชิ้นที่จำเป็น ไม่สุ่มใหม่ทั้งชุด
 export type Placement = {pos: Record<string, Pos>; photos: Record<string, string>; locked: Product[]; set?: string[]}
@@ -117,7 +118,6 @@ export function demoProductImage(name: string) {
 }
 
 // ---- Draft: บันทึกค่าที่เลือกไว้ใน localStorage เครื่องนี้ ไม่เก็บรูปใดๆ ----
-export const DRAFTS_KEY = 'room-ai-drafts'
 export type Draft = {id: string; savedAt: number; plan: Plan; items: string[]; locked: Product[]}
 export const readDrafts = () => readJson<{list: Draft[]}>('local', DRAFTS_KEY, {list: []}).list
 export const writeDrafts = (list: Draft[]) => writeJson('local', DRAFTS_KEY, {list})

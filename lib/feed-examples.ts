@@ -2,8 +2,8 @@
 // Items are exact Shopee listings from catalog/shopee-real-*.csv; links are rebuilt from shop/item ids.
 // No price, stock or fit claims. Images stay null until a verified owner Before (by SHA256) and a
 // Codex After exist locally; they are never bundled or published (see lib/local-demo.ts).
-export type ExampleItem = {id: string; name: string; url: string}
-export type ExamplePost = {id: string; style: string; roomType: string; roomLabel: string; items: ExampleItem[]}
+type ExampleItem = {id: string; name: string; url: string}
+type ExamplePost = {id: string; style: string; roomType: string; roomLabel: string; items: ExampleItem[]}
 
 const item = (shop: number, itemId: number, name: string): ExampleItem =>
   ({id: `shopee-${shop}-${itemId}`, name, url: `https://shopee.co.th/product/${shop}/${itemId}`})
