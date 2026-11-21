@@ -178,6 +178,30 @@ export function parsePlacements(value: unknown, ids: string[]): Placement[] | nu
   return ids.every(id => byId.has(id)) ? ids.map(id => byId.get(id)!) : null
 }
 
+// Where a product lands when the model gave no usable spot: on the floor near the front, in a row.
+const DEFAULT_FLOOR_Y = 85, DEFAULT_WIDTH = 20, DEFAULT_HEIGHT = 25
+
+/**
+ * Last resort after the strict answers failed: never null. Each id takes the first valid entry from any answer
+ * (later answers first), and anything still missing gets a default slot so the render can go on.
+ */
+export function salvagePlacements(answers: unknown[], ids: string[]): Placement[] {
+  const found = new Map<string, Placement>()
+  for (const answer of [...answers].reverse()) {
+    const list = (answer as {placements?: unknown})?.placements
+    if (!Array.isArray(list)) continue
+    for (const raw of list) {
+      const id = (raw as {id?: unknown})?.id
+      if (typeof id !== 'string' || !ids.includes(id) || found.has(id)) continue
+      const one = parsePlacements({placements: [raw]}, [id])
+      if (one) found.set(id, one[0])
+    }
+  }
+  return ids.map((id, i) => found.get(id) ?? {
+    id, centerX: 100 * (i + 1) / (ids.length + 1), floorY: DEFAULT_FLOOR_Y, width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT,
+  })
+}
+
 /** Camera geometry of the room photo, in percent of the image height: enough to turn real cm into pixels on the floor. */
 export type Perspective = {horizonY: number; cameraHeightCm: number}
 const CAMERA_MIN_CM = 40, CAMERA_MAX_CM = 260 // a phone held anywhere from a low crouch to overhead

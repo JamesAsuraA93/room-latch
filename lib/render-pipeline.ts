@@ -13,7 +13,7 @@ import 'server-only'
 import sharp from 'sharp'
 import {sniffImage, type RenderImage, type StyleEntry} from '@/lib/live-render-core'
 import {OpenaiRenderError, openaiEdit, openaiJson} from '@/lib/openai-render'
-import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, roomCleanupPrompt, parseRenderCheck, parseStagingBrief, stagingBriefPrompt, renderCheckRequest, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
+import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, salvagePlacements, parseSize, placedRenderPrompt, placementPrompt, roomCleanupPrompt, parseRenderCheck, parseStagingBrief, stagingBriefPrompt, renderCheckRequest, sizePrompt, withUserWidth, type ProductSize} from '@/lib/render-pipeline-core'
 import {storage} from '@/lib/storage'
 import {DECISIONS_MODEL, decide} from '@/lib/decisions'
 
@@ -140,13 +140,20 @@ export async function renderPlaced(input: PipelineInput, signal?: AbortSignal): 
     products: prepared.map(p => ({id: p.id, name: p.name, size: p.size, aspect: p.cutout.width / p.cutout.height, hint: p.hint})),
   })
   const views = await Promise.all([room, ...input.roomReferences.map(r => r.image), ...(input.floorPlan ? [input.floorPlan.image] : [])].map(visionCopy))
+  const ids = prepared.map(p => p.id)
+  const answers: unknown[] = []
   let placements = null, view = null
   for (let attempt = 0; attempt < 2 && !placements; attempt++) {
     const answer = await openaiJson({prompt, images: views, signal})
-    placements = parsePlacements(answer, prepared.map(p => p.id))
-    view = parsePerspective(answer)
+    answers.push(answer)
+    placements = parsePlacements(answer, ids)
+    view = parsePerspective(answer) ?? view
   }
-  if (!placements) throw new PipelineError('placement_failed')
+  if (!placements) {
+    // render anyway: keep whatever spots were usable, default the rest
+    console.error('placement answers failed validation, salvaging', JSON.stringify(answers).slice(0, 2000))
+    placements = salvagePlacements(answers, ids)
+  }
 
   // Step 5. Back to front, so nearer products cover further ones. Sizes come from the camera geometry when it is
   // consistent (models guess apparent sizes badly, often by half); otherwise the model's own guess is kept.

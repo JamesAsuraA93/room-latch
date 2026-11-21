@@ -1,6 +1,6 @@
 // node scripts/render-pipeline.test.mts — the pure parts of the accurate render pipeline. No network, no images.
 import assert from 'node:assert/strict'
-import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, parseSize, placedRenderPrompt, placementPrompt, roomCleanupPrompt, parseRenderCheck, parseStagingBrief, renderCheckRequest, stagingBriefPrompt, CHECK_PASS, sizePrompt, withUserWidth, type ProductSize} from '../lib/render-pipeline-core.ts'
+import {cutoutPrompt, fallbackSize, fitCutout, parsePerspective, trueBox, isShopeeImageUrl, listingKeys, parsePlacements, salvagePlacements, parseSize, placedRenderPrompt, placementPrompt, roomCleanupPrompt, parseRenderCheck, parseStagingBrief, renderCheckRequest, stagingBriefPrompt, CHECK_PASS, sizePrompt, withUserWidth, type ProductSize} from '../lib/render-pipeline-core.ts'
 
 // storage keys only for real listing ids: nothing from the request can reach another path
 // the cutout key carries the prompt version: a cutout made by an older prompt (a rug cut out as its chair) is never reused
@@ -146,4 +146,11 @@ assert.match(roomCleanupPrompt(), /reflections.*shadows/)
 assert.match(roomCleanupPrompt(), /Reconstruct the floor/)
 assert.match(place, /cleaned room photo/)
 assert.match(place, /not obstacles or scale anchors/)
+// salvage: never fails, keeps usable answers and gives missing ids a default spot on the floor
+const salvaged = salvagePlacements([null, {placements: [{...ok.placements[0], width_pct: 140}, ok.placements[1], {id: 'zz', center_x_pct: 1, floor_y_pct: 1, width_pct: 5, height_pct: 5}]}], ['a', 'b', 'c'])
+assert.deepEqual(salvaged.map(p => p.id), ['a', 'b', 'c'])
+assert.equal(salvaged[0].centerX, 40, 'valid answer kept')
+assert.ok(salvaged[1].width <= 100 && salvaged[2].width > 0, 'bad and missing ids get a default')
+assert.notEqual(salvaged[1].centerX, salvaged[2].centerX, 'defaults do not stack')
+assert.equal(salvagePlacements([], []).length, 0)
 console.log('render-pipeline ok')
