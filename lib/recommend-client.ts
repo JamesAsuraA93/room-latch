@@ -1,7 +1,7 @@
 import type {Plan} from './demo'
 import {RECOMMEND_KEY} from './storage-keys.ts'
 
-export type AiItem = {id: string; title: string; category: string; price: number; rating: number | null; reason: string; url: string | null; image: string | null}
+export type AiItem = {id: string; title: string; category: string; price: number; rating: number | null; reason: string; url: string | null; image?: string | null}
 export type ClientRecommendation = {source: 'ai' | 'rules'; items: AiItem[]; total: number; budget: number; summary: string; fallbackReason?: import('./recommend-status.ts').RecommendFailure}
 export const recommendationKey = (plan: Plan, measuredWidth = false) => JSON.stringify({styleId: plan.style, roomType: plan.roomType, budget: plan.budget, width: measuredWidth ? plan.width : undefined, need: plan.need?.trim() || ''})
 

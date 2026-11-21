@@ -76,7 +76,7 @@ export function ProductSelection({catalog, provider: initialProvider, renderUnav
         if (cancelled) return
         const next: Furniture[] = result.items.slice(0, MAX_FURNITURE).map(item => ({
           id: item.id, name: item.title, category: furnitureCategory(item.title, item.category), styles: [p.style],
-          price: item.price, priceKind: 'listed', image: item.image || listingImagePath(item.id), url: item.url || '',
+          price: item.price, priceKind: 'listed', image: item.image || listingImagePath(item.id) || catalog.find(candidate => candidate.id === item.id)?.image || null, url: item.url || '',
         }))
         setItems(next)
         const message = result.source === 'ai' ? (result.summary || 'AI เลือกตามความต้องการแล้ว เปลี่ยนสินค้าแต่ละชิ้นได้') : `${recommendationFailureMessage(result.fallbackReason)} — แสดงชุดสำรองตามสไตล์และงบ ความต้องการเพิ่มเติมยังไม่ได้รับการประเมิน`

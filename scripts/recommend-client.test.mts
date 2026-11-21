@@ -26,6 +26,7 @@ try {
   const [first, second] = await Promise.all([requestRecommendation(key), requestRecommendation(key)])
   assert.equal(requests.length, 1, 'concurrent mounts share one model request')
   assert.deepEqual(first, second)
+  assert.equal(first.items[0].image, '/api/listings/shopee-1-2/image', 'recommendations retain photos independently of the page catalog')
   await requestRecommendation(key)
   assert.equal(requests.length, 1, 'back navigation uses the saved answer')
   const changed = recommendationKey({...plan, need: 'โต๊ะทำงาน ไม่เอาโซฟา'})

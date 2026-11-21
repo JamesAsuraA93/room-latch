@@ -73,8 +73,8 @@ export async function listingAssets(ids: string[]): Promise<ListingAsset[]> {
  *  the best rated per category among those that fit the budget on their own. */
 export async function recommendCandidates(style: string, budget: number, perCategory = 30): Promise<Candidate[]> {
   const {rows} = await db().query<Candidate>(
-    `select id, title, category, price, rating from (
-       select l.id, l.title, l.category, l.price_thb::float8 as price, l.rating,
+    `select id, title, category, price, rating, image from (
+       select l.id, l.title, l.category, l.price_thb::float8 as price, l.rating, l.image_url as image,
               row_number() over (partition by l.category order by l.rating desc nulls last, l.price_thb) as k
          from shopee_listings l join shopee_listing_styles s on s.listing_id = l.id
         where s.style_id = $1 and l.price_thb between 20 and $2
