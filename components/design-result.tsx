@@ -5,9 +5,10 @@ import {ArrowDownToLine, Bookmark, Check, CheckCircle2, CircleAlert, Clock3, Ref
 import {Button} from '@/components/ui/button'
 import {PageHeader} from '@/components/page-header'
 import {FurnitureImage, FurniturePrice} from '@/components/furniture-image'
-import {baht, t} from '@/lib/copy'
+import {baht} from '@/lib/copy'
 import {readDrafts, readPlan, styleName, writeDrafts} from '@/lib/demo'
 import {BudgetSummary} from '@/components/budget-summary'
+import {WalkScene} from '@/components/walk-scene'
 import {Dialog, DialogContent, DialogDescription, DialogTitle} from '@/components/ui/dialog'
 import {elapsedLabel, isTerminalJob} from '@/lib/render-outcome'
 import {readDesignSession, readSelection, saveDesignSession, type DesignSession} from '@/lib/design-session'
@@ -117,7 +118,7 @@ export function DesignResult({jobId}: {jobId?: string}) {
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline"><Link href="/products"><RefreshCw className="size-4" />เปลี่ยนสินค้า</Link></Button>
         {succeeded && <><Button variant="outline" onClick={save} disabled={saved}>{saved ? <Check className="size-4" /> : <Bookmark className="size-4" />}{saved ? 'บันทึกแล้ว' : 'บันทึกแบบ'}</Button><Button asChild><a href={output!} download="roomlatch-room.png"><ArrowDownToLine className="size-4" />ดาวน์โหลด</a></Button></>}
-        {succeeded && <Button asChild variant="outline"><Link href="/walk">{t.walkDemo}</Link></Button>}
+        {succeeded && <WalkScene jobId={session.job.id} productIds={session.items.map(item => item.id)} before={session.before} />}
       </div>
     </div>
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">

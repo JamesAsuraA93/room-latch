@@ -20,3 +20,6 @@ public/listings/
 .env.production
 .vercel
 .env*
+
+# 360 scenes built from users' own renders (lib/scene-jobs.ts): local, never committed
+/public/walk/scenes/u-*/

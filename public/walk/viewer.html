@@ -179,7 +179,9 @@
 
     const USE_LDI = PARAMS.get("ldi") !== "0";
     const requestedScene = PARAMS.get("scene");
-    const SCENE = requestedScene === "scenes/muji-demo" ? requestedScene : "scenes/muji-6";
+    // demo scenes, or a scene built from the user's own render (scenes/u-<render job id>); nothing else is fetched
+    const USER_SCENE = /^scenes\/u-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const SCENE = requestedScene === "scenes/muji-demo" || USER_SCENE.test(requestedScene ?? "") ? requestedScene : "scenes/muji-6";
     const EYE_H = 1.6;                           // depth.py assumes the camera stood 1.6 m above the floor
     const PRODUCT_CLEARANCE = 0.3;               // how close you can walk up to a product
     const VIEW_BLEND = 0.12;                     // fraction of a view step spent cross-fading
@@ -530,8 +532,9 @@
       for (const node of shown) await world.add(node);
       const listings = [];
       if (SCENE) {
-        const pr = await fetch(`${SCENE}/placements.json`);
-        if (pr.ok) for (const spot of await pr.json()) await world.addProduct(spot);
+        // billboard products (older prototype scenes only); scenes without the file skip it
+        const pr = await fetch(`${SCENE}/placements.json`).catch(() => null);
+        if (pr?.ok) for (const spot of await pr.json()) await world.addProduct(spot);
         // products drawn into the panoramas themselves: one mask per standpoint says which pixels are the product
         const lr = await fetch(`${SCENE}/products.json`);
         if (lr.ok) for (const p of await lr.json()) listings.push({ ...p, maskMaps: await loadMasks(p.masks) });
