@@ -1,5 +1,5 @@
-// Server-only OpenAI Images edit provider: the production renderer. Off by default: used only when
-// ROOMLATCH_RENDER_PROVIDER=openai and OPENAI_API_KEY are set on the server (see liveProvider in lib/live-render-core.ts).
+// Server-only OpenAI Images renderer for local and production environments.
+// Enabled by OPENAI_API_KEY on the server (see liveProvider in lib/live-render-core.ts).
 // Reference: POST https://api.openai.com/v1/images/edits (multipart: model, image, prompt; response data[0].b64_json)
 // https://developers.openai.com/api/docs/guides/image-generation
 // The key is read from env per call and is never logged or returned. No fallback to Codex.

@@ -2,7 +2,7 @@
 import {useId, useState} from 'react'
 import type {Product} from '@/lib/plan'
 import {EXAMPLE_LISTING, shopeeUrl} from '@/lib/demo'
-import {resizeRoomImage} from '@/lib/image'
+import {IMAGE_ACCEPT, resizeRoomImage} from '@/lib/image'
 import {fill, t} from '@/lib/copy'
 import {Button} from '@/components/ui/button'
 
@@ -76,7 +76,7 @@ export function ListingForm({roomType, style, onLock}: {roomType: string; style:
         <label className="block space-y-1">
           <span className="block text-sm font-semibold">{t.productPhoto}</span>
           <span className="block text-xs text-zinc-500">{t.productPhotoHint}</span>
-          <input key={fileKey} type="file" accept="image/*" onChange={onPhoto}
+          <input key={fileKey} type="file" accept={IMAGE_ACCEPT} onChange={onPhoto}
             className="block min-h-11 w-full text-sm file:mr-3 file:min-h-11 file:rounded-2xl file:border-0 file:bg-brand-soft file:px-4 file:text-brand-dark" />
         </label>
         <p className="text-xs text-zinc-500">{t.userEntered}</p>

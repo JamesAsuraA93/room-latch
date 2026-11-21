@@ -6,6 +6,7 @@ import {recommendCandidates} from '@/lib/db'
 import {openaiJson} from '@/lib/openai-render'
 import {recommendLimits, reserveModelCall} from '@/lib/render-jobs'
 import {parsePicks, recommendPrompt, rulesPick, totalOf, withinBudget, type Pick, type RecommendInput, type Recommendation} from '@/lib/recommend-core'
+import {recommendationFailure, type RecommendFailure} from '@/lib/recommend-status'
 
 const TIMEOUT_MS = 60_000
 
@@ -26,21 +27,28 @@ async function aiPicks(input: RecommendInput, candidates: Awaited<ReturnType<typ
 
 /** Model call only while the caller and the deployment are under their daily limits; otherwise (or if the
  *  counter is unreachable) the free rules pick. */
-async function modelAllowed(clientKey: string): Promise<boolean> {
-  try { return await reserveModelCall(clientKey, recommendLimits(process.env)) } catch (e) {
-    console.error('recommend limit check failed', (e as Error).message)
-    return false
+async function modelRefusal(clientKey: string): Promise<RecommendFailure | undefined> {
+  try { return await reserveModelCall(clientKey, recommendLimits(process.env)) ? undefined : 'daily_limit' } catch (e) {
+    const code = (e as {code?: string}).code
+    console.error('recommend limit check failed', code ?? 'unknown')
+    return code === '42P01' ? 'schema_required' : 'limit_check_failed'
   }
 }
 
 export async function recommend(input: RecommendInput, clientKey: string): Promise<Recommendation> {
   const candidates = await recommendCandidates(input.style, input.budget)
-  if (process.env.OPENAI_API_KEY && candidates.length && await modelAllowed(clientKey)) {
+  let fallbackReason: RecommendFailure | undefined = !candidates.length ? 'no_candidates'
+    : !process.env.OPENAI_API_KEY?.trim() ? 'missing_api_key' : await modelRefusal(clientKey)
+  if (!fallbackReason) {
     try {
       const picked = await aiPicks(input, candidates)
       if (picked) return {source: 'ai', items: picked.items, total: totalOf(picked.items), budget: input.budget, summary: picked.summary}
-    } catch (e) { console.error('recommend model failed', (e as Error).message) }
+      fallbackReason = 'model_invalid_response'
+    } catch (e) {
+      fallbackReason = recommendationFailure(e)
+      console.error('recommend model failed', fallbackReason)
+    }
   }
   const items = rulesPick(candidates, input.budget)
-  return {source: 'rules', items, total: totalOf(items), budget: input.budget, summary: ''}
+  return {source: 'rules', items, total: totalOf(items), budget: input.budget, summary: '', fallbackReason}
 }

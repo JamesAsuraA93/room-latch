@@ -13,28 +13,23 @@ const local = {host: '127.0.0.1:3123', origin: 'http://127.0.0.1:3123', 'sec-fet
 const deployed = {host: 'app.example.com', origin: 'https://app.example.com', 'sec-fetch-site': 'same-origin'}
 const codeOf = (g: unknown) => (g as {code: string}).code
 
-// provider selection: one switch, fail closed. codex = local dev only, openai = production (needs a key)
+// Rendering uses the API key in every environment; legacy CLI flags cannot select Codex.
 assert.equal(liveProvider({}), null)
-assert.equal(liveProvider({OPENAI_API_KEY: 'sk-test'}), null, 'a key alone enables nothing')
-assert.equal(liveProvider({ROOMLATCH_RENDER_PROVIDER: 'gemini', OPENAI_API_KEY: 'sk-test'}), null, 'unknown provider is off')
-assert.equal(liveProvider(CODEX), 'codex')
-assert.equal(liveProvider({...CODEX, VERCEL: '1'}), null, 'codex never on Vercel')
-assert.equal(liveProvider({...CODEX, VERCEL_ENV: 'production'}), null, 'codex never on Vercel')
-assert.equal(liveProvider({ROOMLATCH_RENDER_PROVIDER: 'openai'}), null, 'openai needs key')
-assert.equal(liveProvider(OPENAI), 'openai')
-assert.equal(liveProvider({...OPENAI, VERCEL: '1'}), 'openai', 'openai is the production provider')
+assert.equal(liveProvider({OPENAI_API_KEY: '   '}), null)
+assert.equal(liveProvider(CODEX), null)
+assert.equal(liveProvider({OPENAI_API_KEY: 'sk-test'}), 'openai')
+assert.equal(liveProvider({...CODEX, OPENAI_API_KEY: 'sk-test', VERCEL: '1'}), 'openai')
+assert.equal(liveProvider({...CODEX, OPENAI_API_KEY: 'sk-test'}), 'openai')
+assert.equal(liveProvider({...OPENAI, VERCEL_ENV: 'production'}), 'openai')
+assert.equal(liveProvider({ROOMLATCH_RENDER_PROVIDER: 'openai'}), null)
 
-// request gate
+// API availability never bypasses same-origin request protection.
 assert.deepEqual(gateRequest({}, H(local), 'POST'), {ok: false, status: 404, code: 'live_render_disabled'})
-assert.equal(gateRequest(CODEX, H(local), 'POST').ok, true)
-assert.equal(codeOf(gateRequest(CODEX, H({...local, host: '192.168.1.10:3123', origin: 'http://192.168.1.10:3123'}), 'POST')), 'not_loopback')
-assert.equal(codeOf(gateRequest(CODEX, H(deployed), 'POST')), 'not_loopback', 'codex only answers this machine')
-assert.equal(codeOf(gateRequest(CODEX, H({...local, 'sec-fetch-site': 'cross-site'}), 'POST')), 'cross_site')
-assert.equal(codeOf(gateRequest(CODEX, H({...local, origin: 'http://evil.example'}), 'POST')), 'bad_origin')
-assert.equal(codeOf(gateRequest(CODEX, H({host: '127.0.0.1:3123'}), 'POST')), 'bad_origin', 'POST without Origin refused')
-assert.equal(gateRequest(CODEX, H({host: 'localhost:3123'}), 'GET').ok, true)
 assert.deepEqual(gateRequest(OPENAI, H(deployed), 'POST'), {ok: true, provider: 'openai'})
-assert.equal(gateRequest(OPENAI, H(local), 'POST').ok, true, 'openai also works locally')
+assert.equal(gateRequest(OPENAI, H(local), 'POST').ok, true)
+assert.equal(gateRequest(OPENAI, H({host: 'localhost:3123'}), 'GET').ok, true)
+assert.equal(codeOf(gateRequest(OPENAI, H({...local, 'sec-fetch-site': 'cross-site'}), 'POST')), 'cross_site')
+assert.equal(codeOf(gateRequest(OPENAI, H({host: '127.0.0.1:3123'}), 'POST')), 'bad_origin')
 assert.equal(codeOf(gateRequest(OPENAI, H({...deployed, origin: 'https://evil.example'}), 'POST')), 'bad_origin')
 assert.equal(codeOf(gateRequest(OPENAI, H({...deployed, origin: 'not a url'}), 'POST')), 'bad_origin')
 assert.equal(codeOf(gateRequest(OPENAI, H({...deployed, 'sec-fetch-site': 'same-site'}), 'POST')), 'cross_site')

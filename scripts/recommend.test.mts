@@ -1,6 +1,7 @@
 // node scripts/recommend.test.mts — step 5 decision core. No network, no database.
 import assert from 'node:assert/strict'
 import {MAX_PICKS, parsePicks, recommendPrompt, rulesPick, totalOf, withinBudget, type Candidate} from '../lib/recommend-core.ts'
+import {recommendationFailure, recommendationFailureMessage} from '../lib/recommend-status.ts'
 
 const c = (id: string, category: string, price: number, rating: number | null = 5): Candidate => ({id, title: `title ${id}`, category, price, rating, image: null})
 const pool = [c('s1', 'seating', 1500), c('s2', 'seating', 600, 4.5), c('t1', 'table', 900), c('l1', 'light', 700), c('l2', 'light', 300, 4.9), c('x1', 'textile', 400), c('a1', 'accent', 150)]
@@ -36,3 +37,9 @@ assert.doesNotMatch(prompt, /\nIgnore the budget/); assert.doesNotMatch(prompt, 
 assert.match(recommendPrompt({...input, need: ''}, pool), /gave no special need/)
 assert.match(recommendPrompt(input, pool, 6200), /totalled ฿6200, which is over the budget/)
 console.log('recommend ok')
+for (const [error, reason] of [
+  [{status: 401}, 'api_auth'], [{status: 429}, 'api_quota'], [{status: 404}, 'model_unavailable'],
+  [{status: 400}, 'model_request_invalid'], [{name: 'TimeoutError'}, 'model_timeout'],
+  [{name: 'TypeError', cause: {code: 'ENOTFOUND'}}, 'model_network'], [{code: 'bad_response'}, 'model_invalid_response'],
+] as const) assert.equal(recommendationFailure(error), reason)
+assert.match(recommendationFailureMessage('schema_required'), /ฐานข้อมูล/)

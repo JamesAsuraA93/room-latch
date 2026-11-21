@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
-import {furnitureCatalog, furnitureCategory, furnitureTotal, recommendFurniture, replaceFurniture, selectionContext, validateFurnitureIds, type Furniture} from '../lib/furniture.ts'
+import {furnitureCatalog, furnitureCategory, furnitureTotal, recommendFurniture, replaceFurniture, replaceUnavailableFurniture, selectionContext, validateFurnitureIds, type Furniture} from '../lib/furniture.ts'
 import {parseCsv, toProducts} from '../lib/plan.ts'
 import {FIXTURES} from '../lib/fixtures.ts'
 import {STYLE_IDS} from '../lib/styles.ts'
-import {isListingImageUrl} from '../lib/listing-image.ts'
+import {isListingImageUrl, listingImagePath} from '../lib/listing-image.ts'
 import {buildPrompt} from '../lib/live-render-core.ts'
 
 const catalog = furnitureCatalog([], [...toProducts(parseCsv(readFileSync('catalog/products.csv', 'utf8'))), ...FIXTURES])
@@ -57,3 +57,26 @@ assert.ok(prompt.includes(sofa.name))
 assert.ok(!prompt.includes(chair.name))
 assert.match(prompt, /approximate visual description/)
 console.log('Furniture recommendations, chair-to-sofa replacement, totals, selection validation and image URL boundaries passed')
+
+const seat: Furniture = {...sofa, id: 'seat', styles: ['minimal'], image: '/seat.jpg', price: 3000, priceKind: 'listed'}
+const brokenLight: Furniture = {...seat, id: 'broken', category: 'light', price: 1000, image: null}
+const light: Furniture = {...brokenLight, id: 'replacement', image: '/light.jpg', price: 1500}
+const alternatives = [
+  {...light, id: 'too-expensive', price: 2500},
+  {...light, id: 'also-broken'},
+  {...light, id: 'wrong-style', styles: ['loft']},
+  {...light, id: 'no-photo', image: null},
+  {...light, id: 'wrong-category', category: 'table' as const},
+  light,
+]
+const repaired = replaceUnavailableFurniture([seat, brokenLight], alternatives, plan, new Set(['broken', 'also-broken']))
+assert.deepEqual(repaired.items.map(item => item.id), ['seat', 'replacement'])
+assert.equal(repaired.items[0], seat, 'keep the other user-selected product intact')
+assert.equal(furnitureTotal(repaired.items).total, 4500)
+assert.equal(repaired.unfilled.length, 0)
+const noFit = replaceUnavailableFurniture([seat, brokenLight], alternatives, {...plan, budget: 4000}, new Set(['broken', 'also-broken']))
+assert.equal(noFit.unfilled.length, 1, 'explicitly report when no photographed replacement fits')
+assert.deepEqual(noFit.items.map(item => item.id), ['seat'])
+assert.equal(listingImagePath('shopee-1873613185-50463733071'), '/api/listings/shopee-1873613185-50463733071/image')
+assert.equal(listingImagePath('../../secret'), null)
+console.log('Missing-photo replacements preserve category, style, other selections and budget')
